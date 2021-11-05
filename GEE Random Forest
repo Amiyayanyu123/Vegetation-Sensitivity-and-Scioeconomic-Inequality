@@ -1,0 +1,115 @@
+
+var temp_class=function(image){
+return image.select('LST_Day_1km').multiply(0.02).subtract(273.15).copyProperties(image,['system:time_start','system:time_end'])
+}
+var landLST = ee.ImageCollection('MODIS/006/MOD11A1')
+var Image1 = landLST.filterDate('2002-02-01', '2003-01-01');
+var Image2 = landLST.filterDate('2006-11-01', '2009-11-01');
+var Image3 = landLST.filterDate('2012-02-01', '2016-11-01');
+var Image4 = landLST.filterDate('2018-01-01', '2018-11-01');
+var imagecoll = Image1.merge(Image2).merge(Image3).merge(Image4)
+var imagecoll = imagecoll.map(temp_class).filter(ee.Filter.calendarRange(6, 8, 'month'))
+var LST =imagecoll.mean().clip(roi)
+///fraction
+var NLCD = landLST.first().select('LST_Day_1km')
+// Read in NLCD and clip to classification domain (SoCAB) 
+var grid = NLCD
+// Calculate number of pixels in each aggregation pixels 
+var gridScale = grid.projection().nominalScale();
+gridScale = gridScale.multiply(gridScale); 
+var classifiedScale = classified.projection().nominalScale();
+classifiedScale = classifiedScale.multiply(classifiedScale);
+var pixNum = ee.Number(gridScale.divide(classifiedScale)).int();
+
+// CALCULATE FRACTIONAL LAND COVER 
+// Impervious fraction
+var imp_mask = classified.eq(0);
+var imp_frac = imp_mask.eq(1).reduceResolution({
+  reducer: ee.Reducer.mean(),
+  maxPixels: 124,
+  bestEffort: true,
+}).reproject(grid.projection()).rename("impervious");
+// Tree fraction
+var tree_mask = classified.eq(1);
+var tree_frac = tree_mask.eq(1).reduceResolution({
+  reducer: ee.Reducer.mean(),
+  maxPixels: 124,
+  bestEffort: true,
+}).reproject(grid.projection()).rename("tree");
+// Grass fraction
+var grass_mask = classified.eq(2);
+var grass_frac = grass_mask.eq(1).reduceResolution({
+  reducer: ee.Reducer.mean(),
+  maxPixels: 124,
+  bestEffort: true,
+}).reproject(grid.projection()).rename("grass");
+// Shrub fraction
+var shrub_mask = classified.eq(3);
+var shrub_frac = shrub_mask.eq(1).reduceResolution({
+  reducer: ee.Reducer.mean(),
+  maxPixels: 124,
+  bestEffort: true,
+}).reproject(grid.projection()).rename("shrub");
+// NPV fraction
+var npv_mask = classified.eq(4);
+var npv_frac = npv_mask.eq(1).reduceResolution({
+  reducer: ee.Reducer.mean(),
+  maxPixels: 124,
+  bestEffort: true,
+}).reproject(grid.projection()).rename("npv");
+// Water fraction
+var water_mask = classified.eq(5);
+var water_frac = water_mask.eq(1).reduceResolution({
+  reducer: ee.Reducer.mean(),
+  maxPixels: 124,
+  bestEffort: true,
+}).reproject(grid.projection()).rename("water");
+
+// Combine fractional cover masks to multi-band image 
+var multiband_fraction = tree_frac.addBands(grass_frac).addBands(shrub_frac).addBands(npv_frac).addBands(water_frac).addBands(imp_frac).clip(roi);
+///////////
+var all = LST.addBands(multiband_fraction).addBands(drought_NDVI)
+print(all)
+var names=['tree','grass','shrub',"NDVI"];
+var points = ee.FeatureCollection.randomPoints({
+region: roi,
+points:3000,
+seed: 12,
+maxError:123
+}
+);
+// Extract values to points.
+var train =all.sampleRegions({
+  collection: points,
+  scale: 30 ,
+  geometries: true
+});
+Export.table.toDrive({
+  collection: train,
+  description:'train',
+  fileFormat: 'csv'
+});
+var RFtrained = ee.Classifier.smileRandomForest({
+ numberOfTrees: 200,
+ minLeafPopulation: 3,
+ bagFraction: 1, 
+ seed: 123
+})
+.setOutputMode('REGRESSION') 
+    .train({
+    features: train,
+    inputProperties: names,
+    classProperty: 'LST_Day_1km'});   
+    
+print(RFtrained)  
+
+
+var prediction = all.select(names).classify(RFtrained);
+print(prediction)
+
+Export.image.toDrive({
+ image:prediction,
+  description: 'prediction',
+  scale: 250,
+   maxPixels: 1e13
+});
