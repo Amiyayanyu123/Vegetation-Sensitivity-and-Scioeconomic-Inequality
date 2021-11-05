@@ -1,0 +1,21 @@
+setwd("C:\\Users\\ADMIN\\Desktop\\Idea\\figures\\MGWR")
+r<-read.table("rose.txt",header=T, na.strings = "NA", sep="\t")
+
+library(ggplot2)       
+library(RColorBrewer)
+library(extrafont)
+windowsFonts(Times=windowsFont("TT Arial"))
+r$variable <- factor(r$variable, levels = r$variable[order(r$value)])
+colnames(r) = c("Variable","Bandwidth")
+
+ggplot(data=r,aes(Variable,Bandwidth))+
+  geom_bar(stat="identity", color="black", width=0.6,fill="#F68657",size=0.25) +#"#00AFBB"
+  scale_fill_manual(values=brewer.pal(9,"YlOrRd")[c(6:2)])+
+  coord_flip()+
+  theme(
+    axis.title=element_text(size=15,face="plain",color="black"),
+    axis.text = element_text(size=13,face="plain",color="black"),
+    legend.title=element_text(size=13,face="plain",color="black"),
+    text=element_text(size=16,  family="Times"),
+    legend.position = "right"# c(0.83,0.15)
+  )
