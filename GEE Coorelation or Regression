@@ -1,0 +1,222 @@
+Ref:
+DOI:https://www.mdpi.com/2072-4292/10/8/1265/htm
+https://www.zhihu.com/people/li-shi-wei-36
+we also cited their letters
+////////////////////////////////////////////////////////////creat anomaly NDVI and DI monthly
+var NDVI_all = ee.ImageCollection("MODIS/006/MOD13Q1").select('NDVI');
+var SPEI_all = ee.ImageCollection("GRIDMET/DROUGHT").select('spei2y')
+//defines period of interest
+var startyear = 2001; 
+var endyear = 2020; 
+
+var startmonth = 1;
+var endmonth= 12;
+
+var startdate = ee.Date.fromYMD(startyear, startmonth, 1);
+var enddate = ee.Date.fromYMD(endyear+1 , endmonth, 1);
+var years = ee.List.sequence(startyear, endyear);
+var months = ee.List.sequence(startmonth,endmonth);
+//var NDVI = NDVI_all.filterDate(startdate, enddate).sort('system:time_start', false);
+var NDVI = NDVI_all.filterDate(startdate, enddate)
+  .sort('system:time_start', false);
+var SPEI = SPEI_all.filterDate(startdate, enddate)
+  .sort('system:time_start', false);
+//month SPEI
+var monthlySPEI =  ee.ImageCollection.fromImages(
+  years.map(function (y) {
+    return months.map(function(m) {
+    // var n=m+1;
+     //print(m)
+      var w = SPEI.filter(ee.Filter.calendarRange(y, y, 'year'))
+                    .filter(ee.Filter.calendarRange(m, m, 'month'))
+                    .mean();
+      return w.set('year', y)
+              .set('month', m)
+              .set('system:time_start', ee.Date.fromYMD(y, m, 1));
+                        
+    });
+  }).flatten()
+);
+//monthly NDVI 
+  var monthlyNDVI =  ee.ImageCollection.fromImages(
+  years.map(function (y) {
+    return months.map(function(m) {
+    // var n=m+1;
+     //print(m)
+      var w = NDVI.filter(ee.Filter.calendarRange(y, y, 'year'))
+                    .filter(ee.Filter.calendarRange(m, m, 'month'))
+                    .mean();
+      return w.set('year', y)
+              .set('month', m)
+              .set('system:time_start', ee.Date.fromYMD(y, m, 1));
+                        
+    });
+  }).flatten()
+);
+//mean monthly calculation
+var meanMonthlyNDVI =  ee.ImageCollection.fromImages(
+  months.map(function (m) {
+	var w = monthlyNDVI.filter(ee.Filter.eq('month', m)).mean();
+	return w.set('month', m)
+
+  }).flatten()
+);
+//standard deviation calculation
+var sdvMonthlyNDVI =  ee.ImageCollection.fromImages(
+  months.map(function (m) {
+    var w = monthlyNDVI.filter(ee.Filter.eq('month', m)).reduce(ee.Reducer.stdDev());
+    return w.set('month', m)
+ 
+    }).flatten()
+    );
+// Compute fitted values.
+var filtereq = ee.Filter.equals({
+  leftField: 'month',
+  rightField: 'month',
+});
+var join = ee.Join.saveFirst({
+    matchKey: 'match',
+});
+var ND1 = ee.ImageCollection(join.apply(monthlyNDVI,meanMonthlyNDVI,filtereq))
+  .map(function(image) {
+    return image.addBands(image.get('match'));
+  });
+
+var ND2=ee.ImageCollection(join.apply(ND1,sdvMonthlyNDVI,filtereq))
+  .map(function(image) {
+    return image.addBands(image.get('match'));
+  });
+
+// Compute NDVI anolmaly
+var ND_ALL= ND2.map(function(image) {
+  return image.addBands(
+    image.expression('(a1 - b1)/c1', {
+      a1: image.select('NDVI'),
+      b1: image.select('NDVI_1'),
+      c1: image.select('NDVI_stdDev'),
+    }).rename('NDVI_anomaly'));
+});
+var ND_JP= ND2.map(function(image) {
+  return image.addBands(
+    image.expression('a1 - b1', {
+      a1: image.select('NDVI'),
+      b1: image.select('NDVI_1'),
+    }).rename('NDVI_JP'));
+});
+////////////////////////////////////////////////////////////SPEI_NDVI anomaly correlation
+
+
+var NDVI_DR = ND_ALL.sort('system:time_start', true);
+//
+var SPEI_DR = monthlySPEI.sort('system:time_start', true);
+print(NDVI_DR)
+//start corrleation analysis Pearsons correlation
+
+var filtereq = ee.Filter.equals({
+  leftField: 'system:time_start',
+  rightField: 'system:time_start',
+});
+var join = ee.Join.saveFirst({
+    matchKey: 'match',
+});
+
+//spearman correlations
+var corr=function(joined_collection,band1,band2){
+  var coll=ee.ImageCollection(joined_collection);
+  var corr_img=coll.select([band1, band2])
+  .reduce(ee.Reducer.pearsonsCorrelation());
+  var te=corr_img.select('correlation');
+  var test=te;
+  return test;
+  
+};
+
+var SPEI_NDVI = ee.ImageCollection(join.apply(NDVI_DR,SPEI_DR,filtereq))
+  .map(function(image) {
+    return image.addBands(image.get('match'));
+  });
+ var r_NDVI_SPEI = corr(SPEI_NDVI ,'NDVI_anomaly','spei2y').clip(roi);
+ //Map.addLayer(r_NDVI_SPEI,{},'r_NDVI_SPEI');
+var corp=function(joined_collection,band1,band2){
+  var coll=ee.ImageCollection(joined_collection);
+  var corr_img=coll.select([band1, band2])
+  .reduce(ee.Reducer.pearsonsCorrelation());
+  var te=corr_img.select('p-value');
+  var test=te;
+  return test;};
+var p_NDVI_SPEI = corp(SPEI_NDVI ,'NDVI_anomaly','spei2y').clip(roi);
+//export image
+Export.image.toDrive({
+ image:r_NDVI_SPEI,
+  description: 'r_NDVI_SPEI2y',
+  scale: 250,
+   maxPixels: 1e13
+});
+//mask area DEM
+var DEM = ee.Image("MERIT/DEM/v1_0_3").clip(roi).lte(150)
+//mask area canopy 
+var TCC = ee.ImageCollection('NASA/MEASURES/GFCC/TC/v3')
+                  .filter(ee.Filter.date('2015-01-01', '2015-12-31')).median().clip(roi).select('tree_canopy_cover');
+var treeCanopyCover = TCC.select('tree_canopy_cover').gt(0)
+//use mask to modify the hills and urban high density area
+var nondrought_R =r_NDVI_SPEI.updateMask(DEM).updateMask(treeCanopyCover).updateMask(p_NDVI_SPEI)
+var ivp_temp = {"opacity":0.7,"min":-0.2,"max":0.5,"palette":["0b6cff","31feff","0d702c","17ff1e","f0ff0f","ffc84e","ff5e00","ff170b"]}
+Map.addLayer(nondrought_R, ivp_temp, 'NDVIanomaly_PDSI_nondrought')
+//this is a toolbox to add legend
+function addLegend(palette, names) {
+ var legend = ui.Panel({
+   style: {
+     position: 'bottom-right',
+     padding: '5px 10px'
+   }
+ });
+ //title
+ var title = ui.Label({
+   value: 'NDVIanomaly_PDSI_nondrought',
+   style: {
+     fontWeight: 'bold',
+     color: "red",
+     fontSize: '16px'
+   }
+ });
+ legend.add(title);
+
+ //add color and description
+ var addLegendLabel = function(color, name) {
+       var showColor = ui.Label({
+         style: {
+           backgroundColor: '#' + color,
+           padding: '8px',
+           margin: '0 0 4px 0'
+         }
+       });
+
+
+       var desc = ui.Label({
+         value: name,
+         style: {margin: '0 0 4px 8px'}
+       });
+     //colorbar
+       return ui.Panel({
+         widgets: [showColor, desc],
+         layout: ui.Panel.Layout.Flow('horizontal')
+       });
+ };
+
+ //
+
+ for (var i = 0; i < palette.length; i++) {
+   var label = addLegendLabel(palette[i], names[i]);
+   legend.add(label);
+ }  
+
+ Map.add(legend);
+}
+var palette =  ["0b6cff","31feff","0d702c","17ff1e","f0ff0f","ffc84e","ff5e00","ff170b"];
+var names = ["~-0.2","-0.2-0.1","-0.1-0","0.1-0.2","0.2-0.3",
+            "0.3-0.4","0.4-0.5","0.5~"];
+//add legend
+addLegend(palette, names);
+
+
+
