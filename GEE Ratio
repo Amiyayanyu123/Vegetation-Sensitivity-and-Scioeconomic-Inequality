@@ -1,0 +1,34 @@
+var temp_class=function(image){
+return image.select('LST_Day_1km').multiply(0.02).subtract(273.15).gt(43).clip(roi)
+}
+var landLST = ee.ImageCollection('MODIS/006/MOD11A1')
+var image1 = landLST.filterDate('2001-02-01', '2001-11-01');
+var image2 = landLST.filterDate('2003-05-01', '2003-10-01');
+var image4 = landLST.filterDate('2004-10-01', '2006-08-01');
+var image5 = landLST.filterDate('2010-01-01', '2011-12-01');
+var image6 = landLST.filterDate('2017-01-01', '2017-11-01');
+var image7 = landLST.filterDate('2019-01-01', '2020-09-01');
+var exImage1 =image1.merge(image2).merge(image4).merge(image5).merge(image6).merge(image7).filter(ee.Filter.calendarRange(6, 8, 'month'))
+var cmap1 = ['040274', '0502e6', '86e26f', 'ffd611', 'a71001'];
+//classify images for temperature above some degrees
+var ivp_temp = {"opacity":0.7,"bands":["LST_Day_1km"],"min":0,"max":0.4,"palette":["0b6cff","31feff","17ff1e","f0ff0f","ffc84e","ff170b"]}
+var T50plus=exImage1.map(temp_class)
+var t50p_size=T50plus.size()
+var t50p_sum=T50plus.sum().select('LST_Day_1km')
+//Map the probability of temperature above some degrees
+//mask area DEM
+var DEM = ee.Image("MERIT/DEM/v1_0_3").clip(roi).lte(150)
+//mask area canopy 
+var TCC = ee.ImageCollection('NASA/MEASURES/GFCC/TC/v3')
+                  .filter(ee.Filter.date('2015-01-01', '2015-12-31')).median().clip(roi);
+var treeCanopyCover = TCC.select('tree_canopy_cover').gt(0)
+//use mask to modify the hills and urban high density area
+var probable = t50p_sum.divide(t50p_size).clip(roi)
+var diff = probable.updateMask(DEM).updateMask(treeCanopyCover)
+Map.addLayer(diff,ivp_temp, 'Probability of temperature above 43 degree')
+Export.image.toDrive({
+ image:probable,
+  description: 'probable_t43_nondrought',
+  scale: 1000,
+   maxPixels: 1e13
+});
