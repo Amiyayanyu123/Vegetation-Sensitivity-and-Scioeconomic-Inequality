@@ -1,0 +1,117 @@
+library(caret)
+library(leaps)
+library(MASS)
+library(bootStepAIC)
+library(reshape2)
+library(tidyverse)
+library(bootstrap)
+library(QuantPsyc)  #姝ゅ寘涔熷彲浠ヨ緭鍑烘爣鍑嗗寲鐨勫洖褰掔郴鏁? lm.beta(lm_chap)
+library(relaimpo)
+library(psych)
+library(ggplot2)
+#remove spatial autocorrelation
+library(nlme)
+library(ape)
+library(MuMIn)
+library(ggstatsplot)
+library(rsample)
+library(randomForest)# data splitting 
+# basic implementation
+library(ranger)       # a faster implementation of randomForest
+# an aggregator package for performing many machine learning models
+library(h2o) 
+library(extrafont)
+windowsFonts(Times=windowsFont("TT Arial"))# an extremely fast java-based platform
+setwd("C:\\Users\\ADMIN\\Desktop\\Idea\\figures\\RF\\fraction-LSt")
+r<-read.table("train.txt",header=T, na.strings = "NA", sep="\t")
+colnames(r)<-c("LST","grass","impervious","npv","shrub","tree","water")
+dt=na.omit(r)
+
+library(randomForest)
+
+#随机森林计算（默认生成 500 棵决策树），详情 ?randomForest
+set.seed(123)
+RF1 <- randomForest(LST~., data = dt, mtry = 4,importance = TRUE,ntree=500)
+importance1 = RF1$importance
+imp = varImpPlot(RF1)
+imp <- as.data.frame(imp)
+imp$varnames <- rownames(imp)
+colnames(imp) = c("importance","gini","variable")  
+imp <- transform(imp, variable = reorder(variable, importance))
+library(RColorBrewer)
+library(extrafont)
+windowsFonts(Times=windowsFont("TT Arial"))
+ggplot(imp, aes(x=variable, y=importance)) + 
+  geom_bar(stat="identity", color="black", width=0.6,fill="#F68657",size=0.25) +#"#00AFBB"
+  scale_fill_manual(values=brewer.pal(9,"YlOrRd")[c(6:2)])+
+  coord_flip()+
+  theme(
+    axis.title=element_text(size=15,face="plain",color="black"),
+    axis.text = element_text(size=13,face="plain",color="black"),
+    legend.title=element_text(size=13,face="plain",color="black"),
+    text=element_text(size=16,  family="Times"),
+    legend.position = "right"# c(0.83,0.15)
+  )
+
+
+
+x= cbind(dt[,1],dt[,2],dt[,5],dt[,6])
+colnames(x) = c("LST","grass","shrub","tree")
+RF2 <- randomForest(LST~grass+shrub+tree, data = x, importance = TRUE,mtry = 1)
+importance2 = as.data.frame(RF2$importance)
+RF2
+varImpPlot(RF2)
+
+
+
+
+
+###############
+# Save the variable importance values from our model object generated from caret.
+varImp(RF1, scale = TRUE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+library("DALEX")
+EX_RF <- DALEX::explain(model = RF1, 
+                        data    = dt,
+                        y       = dt$LST, 
+                        label   = "Random Forest")
+ld_rf <- model_profile(explainer = EX_RF,
+                       type       = "conditional",
+                       variables  = c("LST","grass","impervious","npv","shrub","tree","water"))
+
+plot(ld_rf) +
+  ggtitle("Local-dependence profiles for white of rooms and black", "")
+al_rf <- model_profile(explainer = EX_RF,
+                       type = "accumulated",
+                       variables = c("LST","grass","impervious","npv","shrub","tree","water"))
+plot(al_rf) +
+  ggtitle("Accumulated-local profiles for white of rooms and black", "")
+pd_rf <- model_profile(explainer = EX_RF,
+                       type = "partial",
+                       variables = c("LST","grass","impervious","npv","shrub","tree","water"))
+pd_rf$agr_profiles$`Legend` = "Partial Dependence"
+ld_rf$agr_profiles$`Legend` = "Local Dependence"
+al_rf$agr_profiles$`Legend` = "Accumulated Local Dependence"
+plot(al_rf)
+plot(pd_rf, ld_rf, al_rf)+theme(axis.title=element_text(size=16,face="plain",color="black"),
+                                axis.text = element_text(size=13,face="plain",color="black"),
+                                panel.background=element_rect(colour="black",fill=NA),
+                                panel.grid.minor=element_blank(),
+                                text=element_text(size=16,  family="Times"),
+                                legend.position="right",
+                                legend.background=element_rect(colour=NA,fill=NA),
+                                axis.ticks=element_line(colour="black"))+ theme(legend.position="none")+
+  theme_bw()+scale_color_manual(values = c("#F68657","#77AF9C","#0089A7"))
+
