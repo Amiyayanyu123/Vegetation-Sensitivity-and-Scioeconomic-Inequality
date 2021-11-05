@@ -1,0 +1,537 @@
+library(reshape2)
+library(tidyverse)
+library(bootstrap)
+library(QuantPsyc)  #standardization lm.beta(lm_chap)
+library(relaimpo)
+library(psych)
+library(ggplot2)
+#remove spatial autocorrelation
+library(nlme)
+library(ape)
+library(MuMIn)
+library(ggstatsplot)
+library(rsq)
+library(extrafont)
+library(car)
+windowsFonts(Times=windowsFont("TT Arial"))
+# to make boxplot to volinplot
+GeomSplitViolin <- ggproto("GeomSplitViolin", GeomViolin, 
+                           draw_group = function(self, data, ..., draw_quantiles = NULL){
+                             # Original function by Jan Gleixner (@jan-glx)
+                             # Adjustments by Wouter van der Bijl (@Axeman)
+                             data <- transform(data, xminv = x - violinwidth * (x - xmin), xmaxv = x + violinwidth * (xmax - x))
+                             grp <- data[1,'group']
+                             newdata <- plyr::arrange(transform(data, x = if(grp%%2==1) xminv else xmaxv), if(grp%%2==1) y else -y)
+                             newdata <- rbind(newdata[1, ], newdata, newdata[nrow(newdata), ], newdata[1, ])
+                             newdata[c(1,nrow(newdata)-1,nrow(newdata)), 'x'] <- round(newdata[1, 'x']) 
+                             if (length(draw_quantiles) > 0 & !scales::zero_range(range(data$y))) {
+                               stopifnot(all(draw_quantiles >= 0), all(draw_quantiles <= 1))
+                               quantiles <- create_quantile_segment_frame(data, draw_quantiles, split = TRUE, grp = grp)
+                               aesthetics <- data[rep(1, nrow(quantiles)), setdiff(names(data), c("x", "y")), drop = FALSE]
+                               aesthetics$alpha <- rep(1, nrow(quantiles))
+                               both <- cbind(quantiles, aesthetics)
+                               quantile_grob <- GeomPath$draw_panel(both, ...)
+                               ggplot2:::ggname("geom_split_violin", grid::grobTree(GeomPolygon$draw_panel(newdata, ...), quantile_grob))
+                             }
+                             else {
+                               ggplot2:::ggname("geom_split_violin", GeomPolygon$draw_panel(newdata, ...))
+                             }
+                           }
+)
+
+create_quantile_segment_frame <- function (data, draw_quantiles, split = FALSE, grp = NULL) {
+  dens <- cumsum(data$density)/sum(data$density)
+  ecdf <- stats::approxfun(dens, data$y)
+  ys <- ecdf(draw_quantiles)
+  violin.xminvs <- (stats::approxfun(data$y, data$xminv))(ys)
+  violin.xmaxvs <- (stats::approxfun(data$y, data$xmaxv))(ys)
+  violin.xs <- (stats::approxfun(data$y, data$x))(ys)
+  if (grp %% 2 == 0) {
+    data.frame(x = ggplot2:::interleave(violin.xs, violin.xmaxvs), 
+               y = rep(ys, each = 2), group = rep(ys, each = 2)) 
+  } else {
+    data.frame(x = ggplot2:::interleave(violin.xminvs, violin.xs), 
+               y = rep(ys, each = 2), group = rep(ys, each = 2)) 
+  }
+}
+
+geom_split_violin <- function (mapping = NULL, data = NULL, stat = "ydensity", position = "identity", ..., draw_quantiles = NULL, trim = TRUE, scale = "area", na.rm = FALSE, show.legend = NA, inherit.aes = TRUE) {
+  layer(data = data, mapping = mapping, stat = stat, geom = GeomSplitViolin, position = position, show.legend = show.legend, inherit.aes = inherit.aes, params = list(trim = trim, scale = scale, draw_quantiles = draw_quantiles, na.rm = na.rm, ...))
+}
+#library(relimp)
+#Import drought corralation R and social-economic datsets 
+setwd("D:\\Project_Urban drought_vegetation_heatwave\\Urban_drought_LA\\Sensitivity_social_factors")
+r<-read.table("r_drought.txt",header=T, na.strings = "NA", sep="\t")
+social1<-read.table("race.txt",header=T, na.strings = "NA", sep="\t")
+social2<-read.table("economy.txt",header=T, na.strings = "NA", sep="\t")
+social3<-read.table("houseuse.txt",header=T, na.strings = "NA", sep="\t")
+lst<-read.table("nature_lst.txt",header=T, na.strings = "NA", sep="\t")
+#datasets combine
+dt<-merge(r,social1)
+dt<-merge(dt,social2)
+dt<-merge(dt,social3)
+dt<-merge(dt,lst)
+colnames(dt)<-c("GEOID","r_dr","white","black","asian","hispanic"
+                ,"income","gross_rent","housevalue"
+                ,"owned","season","rent","vacant",
+               "MAM","JJA","SON","DJF" )
+# set Bootstrapped linear regression(BLR) parametre
+B <- 1000 #Bootstrap
+n<-nrow(dt)
+#Bootstrap
+#bootstrap estimate of ANOVA
+set.seed(123) 
+# set vacant variables 
+lm_b_social={}
+lm_p_social={}
+lm_b_social_std={}
+R2_adj_all={}
+lmg_social={}
+VIF_dr = {}
+for(b in 1:B){
+  dt_sub<-dt[sample(1:n,500, replace=T),]
+  social <-lm(formula= r_dr ~  white + black + asian + hispanic ,data=dt_sub)
+  regress_social <-as.data.frame(summary(social)[4])#?
+  print(summary(social)[4])
+  lm_b_social=rbind(lm_b_social, regress_social[,1])
+  lm_p_social=rbind(lm_p_social, regress_social[,4])
+  lm_b_social_std=rbind(lm_b_social_std, lm.beta(social))
+  vif = vif(social)
+  
+  R2_adj<-summary(social)[[8]]#?
+  R2_adj_all=rbind(R2_adj_all, R2_adj)
+  importance<-calc.relimp(social, type = c("lmg"), rela = TRUE)
+  lmg_social<-rbind(lmg_social,importance$lmg)
+VIF_dr = rbind(VIF,vif)
+}
+# same method for non-drought years
+setwd("D:\\Project_Urban drought_vegetation_heatwave\\Urban_drought_LA\\Sensitivity_social_factors")
+r_ndr<-read.table("r_nondrought.txt",header=T, na.strings = "NA", sep="\t")
+dt_ndr<-merge(r_ndr,social1)
+dt_ndr<-merge(dt_ndr,social2)
+dt_ndr<-merge(dt_ndr,social3)
+dt_ndr<-merge(dt_ndr,lst)
+
+colnames(dt_ndr)<-c("GEOID","r_ndr","white","black","asian","hispanic"
+                ,"income","gross_rent","housevalue"
+                ,"owned","season","rent","vacant"
+                ,"MAM","JJA","SON","DJF" )
+B <- 1000 #Bootstrap
+n<-nrow(dt_ndr)
+#Bootstrap
+#bootstrap estimate of ANOVA
+set.seed(123) 
+lm_b_social_ndr={}
+lm_p_social_ndr={}
+lm_b_social_std_ndr={}
+R2_adj_all_ndr={}
+lmg_social_ndr={}
+VIF_ndr={}
+for(b in 1:B){
+  dt_sub_ndr<-dt_ndr[sample(1:n,500, replace=T),]
+  social_ndr <-lm(formula = r_ndr ~ white + black + asian + hispanic , data=dt_sub_ndr)
+  regress_social_ndr <-as.data.frame(summary(social_ndr)[4])#?
+  print(summary(social_ndr)[4])
+  lm_b_social_ndr=rbind(lm_b_social_ndr, regress_social_ndr[,1])
+  lm_p_social_ndr=rbind(lm_p_social_ndr, regress_social_ndr[,4])
+  lm_b_social_std_ndr=rbind(lm_b_social_std_ndr, lm.beta(social_ndr))
+  Vif=as.data.frame(vif(social_ndr))
+  
+  R2_adj_ndr<-summary(social_ndr)[[9]]#?
+  R2_adj_all_ndr=rbind(R2_adj_all_ndr, R2_adj_ndr)
+  importance_ndr<-calc.relimp(social_ndr, type = c("lmg"), rela = TRUE)#rela灏辨槸鐩稿锛屾墍鏈夊洜绱犵浉鍔犱负鐧惧垎涔嬬櫨
+  lmg_social_ndr<-rbind(lmg_social_ndr,importance_ndr$lmg)
+  VIF_ndr=rbind(VIF_ndr,vif)
+  }
+# use ggplot2 to plot
+v1= VIF_ndr
+v2=VIF_dr
+colnames(v1)<-c("White","Black","Asian","H")
+colnames(v2)<-c("White","Black","Asian","H")
+v1 <- melt(v1)
+v1=transform(v1, year = "nondrought")
+v2 <- melt(v2)
+v2=transform(v2, year = "drought")
+v_race=rbind(v1,v2)
+colnames(v_race) = c("ID","variable","beta","year")
+tiff("v_race.pdf", units="in", width=5, height=5)
+ggplot(v_race, aes(x = variable, y = beta,fill=factor(year)))+
+  geom_boxplot(outlier.size = 1, aes(fill=factor(year)),
+               position = position_dodge(0.8),size=0.5) +  
+  guides(fill=guide_legend(title="year"))+scale_y_continuous(name="VIF")+
+  theme_minimal()+scale_fill_manual(values=c("#F68657","#77AF9C"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=24,  family="Times"),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ theme(legend.position="none")
+dev.off()
+#meltdata
+r1=lm_b_social_std_ndr
+r2=lm_b_social_std
+colnames(r1)<-c("White","Black","Asian","H")
+colnames(r2)<-c("White","Black","Asian","H")
+r1 <- melt(r1)
+r1=transform(r1, year = "nondrought")
+r2 <- melt(r2)
+r2=transform(r2, year = "drought")
+R_race=rbind(r1,r2)
+colnames(R_race) = c("ID","variable" ,"beta","year")
+tiff("race.tiff", units="in", width=5, height=5, res=600)
+ggplot(R_race, aes(x = variable, y = beta,fill=factor(year)))+
+  geom_split_violin(draw_quantiles = 0.5,trim = FALSE)+
+  guides(fill=guide_legend(title="year"))+
+  theme_minimal()+scale_fill_manual(values=c("#F68657","#77AF9C"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        text=element_text(size=24,  family="Times"),
+        panel.grid.minor=element_blank(),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+theme(legend.position="none")
+dev.off()
+
+
+p1=lm_p_social_ndr[,2:5]
+colnames(p1)<-c("White","Black","Asian","H")
+p2=lm_p_social[,2:5]
+colnames(p2)<-c("White","Black","Asian","H")
+p1 <- melt(p1)
+p1=transform(p1, year = "nondrought")
+p2 <- melt(p2)
+p2=transform(p2, year = "drought")
+P_race=rbind(p1,p2)
+colnames(P_race)<-c("ID","variable","p_value","year")
+tiff("P_race.tiff", units="in", width=5, height=5, res=600)
+ggplot(P_race, aes(x = variable, y = p_value,fill=factor(year)))+
+  geom_boxplot(outlier.size = 1, aes(fill=factor(year)),
+               position = position_dodge(0.8),size=0.5) +  
+  guides(fill=guide_legend(title="year"))+scale_y_continuous(name="p-value")+
+  theme_minimal()+scale_fill_manual(values=c("#F68657","#77AF9C"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=24,  family="Times"),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ theme(legend.position="none")
+dev.off()
+#######################################################################
+lm_b_social={}
+lm_p_social={}
+lm_b_social_std={}
+R2_adj_all={}
+lmg_social={}
+for(b in 1:B){
+  dt_sub<-dt[sample(1:n,500, replace=T),]
+  social <-lm(formula= r_dr ~ owned + season + rent + vacant
+              ,data=dt_sub)
+  regress_social <-as.data.frame(summary(social)[4])#?
+  print(summary(social)[4])
+  lm_b_social=rbind(lm_b_social, regress_social[,1])
+  lm_p_social=rbind(lm_p_social, regress_social[,4])
+  lm_b_social_std=rbind(lm_b_social_std, lm.beta(social))
+  
+  R2_adj<-summary(social)[[9]]#?
+  R2_adj_all=rbind(R2_adj_all, R2_adj)
+  importance<-calc.relimp(social, type = c("lmg"), rela = TRUE)#rela灏辨槸鐩稿锛屾墍鏈夊洜绱犵浉鍔犱负鐧惧垎涔嬬櫨
+  lmg_social<-rbind(lmg_social,importance$lmg)
+}
+lm_b_social_ndr={}
+lm_p_social_ndr={}
+lm_b_social_std_ndr={}
+R2_adj_all_ndr={}
+lmg_social_ndr={}
+
+for(b in 1:B){
+  dt_sub_ndr<-dt_ndr[sample(1:n,500, replace=T),]
+  social_ndr <-lm(formula = r_ndr ~ owned + season + rent + vacant , data=dt_sub_ndr)
+  regress_social_ndr <-as.data.frame(summary(social_ndr)[4])#?
+  print(summary(social_ndr)[4])
+  lm_b_social_ndr=rbind(lm_b_social_ndr, regress_social_ndr[,1])
+  lm_p_social_ndr=rbind(lm_p_social_ndr, regress_social_ndr[,4])
+  lm_b_social_std_ndr=rbind(lm_b_social_std_ndr, lm.beta(social_ndr))
+  
+  R2_adj_ndr<-summary(social_ndr)[[9]]#?
+  R2_adj_all_ndr=rbind(R2_adj_all_ndr, R2_adj_ndr)
+  importance_ndr<-calc.relimp(social_ndr, type = c("lmg"), rela = TRUE)#rela灏辨槸鐩稿锛屾墍鏈夊洜绱犵浉鍔犱负鐧惧垎涔嬬櫨
+  lmg_social_ndr<-rbind(lmg_social_ndr,importance_ndr$lmg)
+}
+r1=lm_b_social_std_ndr
+r2=lm_b_social_std
+colnames(r1)= c("Owned","S","Rent","Vacant")
+colnames(r2)= c("Owned","S","Rent","Vacant")
+r1 <- melt(r1)
+r1=transform(r1, year = "nondrought")
+r2 <- melt(r2)
+r2=transform(r2, year = "drought")
+R_houseuse=rbind(r1,r2)
+colnames(R_houseuse) = c("ID","variable","beta","year")
+tiff("houseuse.tiff", units="in", width=5, height=5, res=600)
+ggplot(R_houseuse, aes(x = variable, y = beta,fill=factor(year)))+
+  geom_split_violin(draw_quantiles = 0.5,trim = FALSE)+
+  guides(fill=guide_legend(title="year"))+
+  theme_minimal()+scale_fill_manual(values=c("#F68657","#77AF9C"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        text=element_text(size=24,  family="Times"),
+        panel.grid.minor=element_blank(),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+theme(legend.position="none")
+dev.off()
+
+p1=lm_p_social_ndr[,2:5]
+colnames(p1)<-c("Owned","S","Rent","Vacant")
+p2=lm_p_social[,2:5]
+colnames(p2)<-c("Owned","S","Rent","Vacant")
+p1 <- melt(p1)
+p1=transform(p1, year = "nondrought")
+p2 <- melt(p2)
+p2=transform(p2, year = "drought")
+P_houseuse=rbind(p1,p2)
+colnames(P_houseuse)<-c("ID","variable","p_value","year")
+tiff("P_houseuse.tiff", units="in", width=5, height=5, res=600)
+ggplot(P_houseuse, aes(x = variable, y = p_value,fill=factor(year)))+
+  geom_boxplot(outlier.size = 1, aes(fill=factor(year)),
+               position = position_dodge(0.8),size=0.5) +  
+  guides(fill=guide_legend(title="year"))+scale_y_continuous(name="p-value")+
+  theme_minimal()+scale_fill_manual(values=c("#F68657","#77AF9C"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=24,  family="Times"),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ theme(legend.position="none")
+dev.off()
+###################################################################
+lm_b_social={}
+lm_p_social={}
+lm_b_social_std={}
+R2_adj_all={}
+lmg_social={}
+for(b in 1:B){
+  dt_sub<-dt[sample(1:n,500, replace=T),]
+  social <-lm(formula= r_dr ~ income + gross_rent + housevalue 
+              ,data=dt_sub)
+  regress_social <-as.data.frame(summary(social)[4])#?
+  print(summary(social)[4])
+  lm_b_social=rbind(lm_b_social, regress_social[,1])
+  lm_p_social=rbind(lm_p_social, regress_social[,4])
+  lm_b_social_std=rbind(lm_b_social_std, lm.beta(social))
+  
+  R2_adj<-summary(social)[[9]]#?
+  R2_adj_all=rbind(R2_adj_all, R2_adj)
+  importance<-calc.relimp(social, type = c("lmg"), rela = TRUE)#rela灏辨槸鐩稿锛屾墍鏈夊洜绱犵浉鍔犱负鐧惧垎涔嬬櫨
+  lmg_social<-rbind(lmg_social,importance$lmg)
+}
+lm_b_social_ndr={}
+lm_p_social_ndr={}
+lm_b_social_std_ndr={}
+R2_adj_all_ndr={}
+lmg_social_ndr={}
+
+for(b in 1:B){
+  dt_sub_ndr<-dt_ndr[sample(1:n,500, replace=T),]
+  social_ndr <-lm(formula = r_ndr ~ income + gross_rent + housevalue , data=dt_sub_ndr)
+  regress_social_ndr <-as.data.frame(summary(social_ndr)[4])#?
+  print(summary(social_ndr)[4])
+  lm_b_social_ndr=rbind(lm_b_social_ndr, regress_social_ndr[,1])
+  lm_p_social_ndr=rbind(lm_p_social_ndr, regress_social_ndr[,4])
+  lm_b_social_std_ndr=rbind(lm_b_social_std_ndr, lm.beta(social_ndr))
+  
+  R2_adj_ndr<-summary(social_ndr)[[9]]#?
+  R2_adj_all_ndr=rbind(R2_adj_all_ndr, R2_adj_ndr)
+  importance_ndr<-calc.relimp(social_ndr, type = c("lmg"), rela = TRUE)#rela灏辨槸鐩稿锛屾墍鏈夊洜绱犵浉鍔犱负鐧惧垎涔嬬櫨
+  lmg_social_ndr<-rbind(lmg_social_ndr,importance_ndr$lmg)
+}
+r1=lm_b_social_std_ndr
+r2=lm_b_social_std
+colnames(r1)<-c("Income","GR","HV")
+colnames(r2)<-c("Income","GR","HV")
+r1 <- melt(r1)
+r1=transform(r1, year = "nondrought")
+r2 <- melt(r2)
+r2=transform(r2, year = "drought")
+R_economy=rbind(r1,r2)
+colnames(R_economy) = c("ID","variable","beta","year")
+tiff("economy.tiff", units="in", width=5, height=5, res=600)
+ggplot(R_economy, aes(x = variable, y = beta,fill=factor(year)))+
+  geom_split_violin(draw_quantiles = 0.5,trim = FALSE)+
+  guides(fill=guide_legend(title="year"))+
+  theme_minimal()+scale_fill_manual(values=c("#F68657","#77AF9C"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        text=element_text(size=24,  family="Times"),
+        panel.grid.minor=element_blank(),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+theme(legend.position="none")
+dev.off()
+p1=lm_p_social_ndr[,2:4]
+colnames(p1)<-c("Income","GR","HV")
+p2=lm_p_social[,2:4]
+colnames(p2)<-c("Income","GR","HV")
+p1 <- melt(p1)
+p1=transform(p1, year = "nondrought")
+p2 <- melt(p2)
+p2=transform(p2, year = "drought")
+P_economy=rbind(p1,p2)
+colnames(P_economy)<-c("ID","variable","p_value","year")
+tiff("P_economy.tiff", units="in", width=5, height=5, res=600)
+ggplot(P_economy, aes(x = variable, y = p_value,fill=factor(year)))+
+  geom_boxplot(outlier.size = 1, aes(fill=factor(year)),
+               position = position_dodge(0.8),size=0.5) +  
+  guides(fill=guide_legend(title="year"))+scale_y_continuous(name="p-value")+
+  theme_minimal()+scale_fill_manual(values=c("#F68657","#77AF9C"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=24,  family="Times"),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ theme(legend.position="none")
+dev.off()
+#######################################################################
+lm_b_social={}
+lm_p_social={}
+lm_b_social_std={}
+R2_adj_all={}
+lmg_social={}
+for(b in 1:B){
+  dt_sub<-dt[sample(1:n,500, replace=T),]
+  social <-lm(formula= r_dr ~MAM+JJA+SON+DJF ,data=dt_sub)
+  regress_social <-as.data.frame(summary(social)[4])#?
+  print(summary(social)[4])
+  lm_b_social=rbind(lm_b_social, regress_social[,1])
+  lm_p_social=rbind(lm_p_social, regress_social[,4])
+  lm_b_social_std=rbind(lm_b_social_std, lm.beta(social))
+  
+  R2_adj<-summary(social)[[9]]#?
+  R2_adj_all=rbind(R2_adj_all, R2_adj)
+  importance<-calc.relimp(social, type = c("lmg"), rela = TRUE)#rela灏辨槸鐩稿锛屾墍鏈夊洜绱犵浉鍔犱负鐧惧垎涔嬬櫨
+  lmg_social<-rbind(lmg_social,importance$lmg)
+}
+lm_b_social_ndr={}
+lm_p_social_ndr={}
+lm_b_social_std_ndr={}
+R2_adj_all_ndr={}
+lmg_social_ndr={}
+
+for(b in 1:B){
+  dt_sub_ndr<-dt_ndr[sample(1:n,500, replace=T),]
+  social_ndr <-lm(formula = r_ndr ~MAM + JJA + SON + DJF, data=dt_sub_ndr)
+  regress_social_ndr <-as.data.frame(summary(social_ndr)[4])#?
+  print(summary(social_ndr)[4])
+  lm_b_social_ndr=rbind(lm_b_social_ndr, regress_social_ndr[,1])
+  lm_p_social_ndr=rbind(lm_p_social_ndr, regress_social_ndr[,4])
+  lm_b_social_std_ndr=rbind(lm_b_social_std_ndr, lm.beta(social_ndr))
+}
+r1=lm_b_social_std_ndr
+r2=lm_b_social_std
+r1 <- melt(r1)
+r1=transform(r1, year = "nondrought")
+r2 <- melt(r2)
+r2=transform(r2, year = "drought")
+R_LST=rbind(r1,r2)
+colnames(R_LST) = c("ID","variable","beta","year")
+tiff("LST.tiff", units="in", width=5, height=5, res=600)
+ggplot(R_LST, aes(x = variable, y = beta,fill=factor(year)))+
+  geom_split_violin(draw_quantiles = 0.5,trim = FALSE)+
+  guides(fill=guide_legend(title="year"))+
+  theme_minimal()+scale_fill_manual(values=c("#F68657","#77AF9C"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        text=element_text(size=24,  family="Times"),
+        panel.grid.minor=element_blank(),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+theme(legend.position="none")
+dev.off()
+p1=lm_p_social_ndr[,2:5]
+colnames(p1)<-c("MAM","JJA","SON","DJF")
+p2=lm_p_social[,2:5]
+colnames(p2)<-c("MAM","JJA","SON","DJF")
+p1 <- melt(p1)
+p1=transform(p1, year = "Non-drought")
+p2 <- melt(p2)
+p2=transform(p2, year = "Drought")
+P_LST=rbind(p1,p2)
+colnames(P_LST)<-c("ID","variable","p_value","year")
+tiff("p_LST.tiff", units="in", width=5, height=5, res=600)
+ggplot(P_LST, aes(x = variable, y = p_value,fill=factor(year)))+
+  geom_boxplot(outlier.size = 1, aes(fill=factor(year)),
+               position = position_dodge(0.8),size=0.5) +  
+  guides(fill=guide_legend(title="year"))+scale_y_continuous(name="p-value")+
+  theme_minimal()+scale_fill_manual(values=c("#F68657","#77AF9C"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=24,  family="Times"),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ theme(legend.position="bottom",legend.text=element_text(size=24,  family="Times"),legend.title=element_blank())
+dev.off()
+#ggplot
+P_race=transform(P_race, social = "race")
+P_houseuse=transform(P_houseuse, social = "houseuse")
+P_LST=transform(P_LST, social = "LST")
+P_economy=transform(P_economy, social = "economy")
+R_race=transform(R_race, social = "race")
+R_houseuse=transform(R_houseuse, social = "houseuse")
+R_LST=transform(R_LST, social = "LST")
+R_economy=transform(R_economy, social = "economy")
+R = rbind(R_houseuse, R_race, R_LST,R_economy)
+P = rbind(P_houseuse,P_race,P_LST,P_economy)
+R=transform(R, regression = "beta")
+P=transform(P, regression = "p_value")
+colnames(R)=c("ID","variable","value","category","social","regression")
+colnames(P)=c("ID","variable","value","category","social","regression")
+all = rbind(R,P)
+library(extrafont)
+windowsFonts(Times=windowsFont("TT Arial"))
+
+tiff("all.tiff", units="in", width=16, height=8, res=600)
+ggplot(all, aes(x = variable, y = value,fill=factor(category)))+
+  geom_split_violin(draw_quantiles = 0.5,trim = FALSE)+
+  guides(fill=guide_legend(title="category"))+
+  theme_minimal()+scale_fill_manual(values=c("#F68657","#77AF9C"))+
+  theme(axis.title=element_text(size=15,face="plain",color="black"),
+        axis.text = element_text(size=13,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        text=element_text(size=16,  family="Times"),
+        panel.grid.minor=element_blank(),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+theme(legend.position="none")+
+facet_wrap(regression+social~.,ncol = 4,nrow=2, scales = "free")
+dev.off()
+
+tiff("all2.tiff", units="in", width=16, height=8, res=600)
+ggplot(all, aes(x = variable, y = value,fill=factor(category)))+
+  geom_boxplot(outlier.size = 1, aes(fill=factor(category)),
+               position = position_dodge(0.8),size=0.5) +  
+  guides(fill=guide_legend(title="year"))+
+  theme_minimal()+scale_fill_manual(values=c("#F68657","#77AF9C"))+
+  theme(axis.title=element_text(size=15,face="plain",color="black"),
+        axis.text = element_text(size=13,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=16,  family="Times"),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ theme(legend.position="bottom")+
+facet_wrap(regression+social~.,ncol = 4,nrow=2, scales = "free")
+dev.off()
