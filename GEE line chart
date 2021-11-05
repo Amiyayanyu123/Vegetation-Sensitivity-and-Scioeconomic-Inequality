@@ -1,0 +1,37 @@
+//LA PDSI
+Map.centerObject(roi, 10);  
+//monthly pdsi
+var collection = ee.ImageCollection("IDAHO_EPSCOR/TERRACLIMATE").select("pdsi")  
+var yearList = ee.List.sequence(2000, 2020);  
+var monthList = ee.List.sequence(1, 12);  
+var imgList = yearList.map(function(year) {  
+  year = ee.Number(year);  
+  var monthImgList = monthList.map(function(month) {  
+    month = ee.Number(month);  
+    var tempCol = collection.filter(ee.Filter.calendarRange(year, year, "year"))  
+                    .filter(ee.Filter.calendarRange(month, month, "month")) 
+    var img = tempCol.mean()
+    var img = img.select("pdsi").multiply(0.01) ;  
+    img = img.set("year", year);  
+    img = img.set("month", month);  
+    var date = ee.Date.fromYMD(year, month, 1);  
+    img = img.set("system:index", date.format("yyyyMM"));  
+    img = img.set("system:time_start", date.millis());  
+    return img;  
+  });  
+  return monthImgList;  
+});  
+imgList = imgList.flatten();  
+var imgCol = ee.ImageCollection.fromImages(imgList);  
+//chart             
+var sCol = imgCol.filterDate("2001-1-1", "2020-12-1")  
+             .select('pdsi');  
+// Define the chart and print it to the console.
+var chart = ui.Chart.image.series({
+  imageCollection: sCol,
+  region: roi,
+  reducer:ee.Reducer.mean(),
+  scale: 1000
+}).setOptions({title: 'PDSI'});
+
+print(chart);
