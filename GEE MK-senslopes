@@ -1,0 +1,233 @@
+////////////////////////////////////////////////////////////creat anomaly NDVI and SPEI monthly
+var NDVI_all = ee.ImageCollection("MODIS/006/MOD13Q1").select('NDVI');
+//defines period of interest
+var startyear = 2001; 
+var endyear = 2020; 
+
+var startmonth = 1;
+var endmonth= 12;
+
+var startdate = ee.Date.fromYMD(startyear, startmonth, 1);
+var enddate = ee.Date.fromYMD(endyear+1 , endmonth, 1);
+var years = ee.List.sequence(startyear, endyear);
+var months = ee.List.sequence(startmonth,endmonth);
+//var NDVI = NDVI_all.filterDate(startdate, enddate).sort('system:time_start', false);
+var NDVI = NDVI_all.filterDate(startdate, enddate)
+  .sort('system:time_start', false);
+//monthly NDVI 
+  var monthlyNDVI =  ee.ImageCollection.fromImages(
+  years.map(function (y) {
+    return months.map(function(m) {
+    // var n=m+1;
+     //print(m)
+      var w = NDVI.filter(ee.Filter.calendarRange(y, y, 'year'))
+                    .filter(ee.Filter.calendarRange(m, m, 'month'))
+                    .mean();
+      return w.set('year', y)
+              .set('month', m)
+              .set('system:time_start', ee.Date.fromYMD(y, m, 1).millis());
+                        
+    });
+  }).flatten()
+);
+//mean monthly calculation
+var meanMonthlyNDVI =  ee.ImageCollection.fromImages(
+  months.map(function (m) {
+	var w = monthlyNDVI.filter(ee.Filter.eq('month', m)).mean();
+	return w.set('month', m)
+
+  }).flatten()
+);
+//standard deviation calculation
+var sdvMonthlyNDVI =  ee.ImageCollection.fromImages(
+  months.map(function (m) {
+    var w = monthlyNDVI.filter(ee.Filter.eq('month', m)).reduce(ee.Reducer.stdDev());
+    return w.set('month', m)
+ 
+    }).flatten()
+    );
+// Compute fitted values.
+var filtereq = ee.Filter.equals({
+  leftField: 'month',
+  rightField: 'month',
+});
+var join = ee.Join.saveFirst({
+    matchKey: 'match',
+});
+var ND1 = ee.ImageCollection(join.apply(monthlyNDVI,meanMonthlyNDVI,filtereq))
+  .map(function(image) {
+    return image.addBands(image.get('match'));
+  });
+
+var ND2=ee.ImageCollection(join.apply(ND1,sdvMonthlyNDVI,filtereq))
+  .map(function(image) {
+    return image.addBands(image.get('match'));
+  });
+
+// Compute NDVI anolmaly
+var ND_ALL= ND2.map(function(image) {
+  return image.addBands(
+    image.expression('(a1 - b1)', {
+      a1: image.select('NDVI'),
+      b1: image.select('NDVI_1'),
+    }).multiply(10000).rename('NDVI_anomaly'));
+});
+//////////////////////////////////////////////trends analysis
+var NDVI_DR1 = ND_ALL.filterDate('2001-01-01', '2020-12-01').sort('system:time_start', true);
+var NDVI_DR = NDVI_DR1
+print(NDVI_DR)
+//
+
+var coll = NDVI_DR.select("NDVI")
+var afterFilter = ee.Filter.lessThan({
+  leftField: 'system:time_start',
+  rightField: 'system:time_start'
+});
+var joined = ee.ImageCollection(ee.Join.saveAll('after').apply({
+  primary: coll,
+  secondary: coll,
+  condition: afterFilter
+}));
+print(joined)
+var sign = function(i, j) { // i and j are images
+  return ee.Image(j).neq(i) // Zero case
+      .multiply(ee.Image(j).subtract(i).clamp(-1, 1)).int();
+};
+
+var kendall = ee.ImageCollection(joined.map(function(current) {
+  var afterCollection = ee.ImageCollection.fromImages(current.get('after'));
+  return afterCollection.map(function(image) {
+    // The unmask is to prevent accumulation of masked pixels that
+    // result from the undefined case of when either current or image
+    // is masked.  It won't affect the sum, since it's unmasked to zero.
+    return ee.Image(sign(current, image)).unmask(0);
+  });
+  // Set parallelScale to avoid User memory limit exceeded.
+}).flatten()).reduce('sum', 2);
+
+var palette = ['red', 'white', 'green'];
+Map.addLayer(kendall.clip(roi), {palette: palette}, 'kendall');
+// Stretch this as necessary.
+//Map.addLayer(kendall.toDouble().clip(roi), {palette: palette}, 'kendall');
+//sen_slope
+var slope = function(i, j) { // i and j are images
+  return ee.Image(j).subtract(i).divide(10000)
+      .divide(ee.Image(j).date().difference(ee.Image(i).date(), 'years'))
+      .rename('slope')
+      .float();
+};
+
+var slopes = ee.ImageCollection(joined.map(function(current) {
+  var afterCollection = ee.ImageCollection.fromImages(current.get('after'));
+  return afterCollection.map(function(image) {
+      return ee.Image(slope(current, image));
+  });
+}).flatten());
+
+var sensSlope = slopes.reduce(ee.Reducer.median(), 2).clip(roi); // Set parallelScale.
+//Map.addLayer(sensSlope.clip(roi), {palette: palette}, 'sensSlope');
+// This function adds a time band to the image.
+var createTimeBand = function(image) {
+  return image.addBands(image.metadata('system:time_start').divide(1e18));
+};
+// Load the input image collection: projected climate data.
+
+var createConstantBand = function(image) {
+  return ee.Image(1).addBands(image);
+};
+var linear =function(joined_collection,band1,band2){
+  var coll=ee.ImageCollection(joined_collection);
+  var corr_img=coll.select([band1, band2])
+  .reduce(
+  ee.Reducer.robustLinearRegression({
+    numX: 1,
+    numY: 1
+}));
+  print(corr_img)
+  var te=corr_img.select('coefficients');
+  var test=te;
+  return test;
+};
+// Display the results.
+
+//P and Z
+var groups = coll.map(function(i) {
+  var matches = coll.map(function(j) {
+    return i.eq(j); // i and j are images.
+  }).sum();
+  return i.multiply(matches.gt(1));
+});
+
+// Compute tie group sizes in a sequence.  The first group is discarded.
+var group = function(array) {
+  var length = array.arrayLength(0);
+  // Array of indices.  These are 1-indexed.
+  var indices = ee.Image([1])
+      .arrayRepeat(0, length)
+      .arrayAccum(0, ee.Reducer.sum())
+      .toArray(1);
+  var sorted = array.arraySort();
+  var left = sorted.arraySlice(0, 1);
+  var right = sorted.arraySlice(0, 0, -1);
+  // Indices of the end of runs.
+  var mask = left.neq(right)
+  // Always keep the last index, the end of the sequence.
+      .arrayCat(ee.Image(ee.Array([[1]])), 0);
+  var runIndices = indices.arrayMask(mask);
+  // Subtract the indices to get run lengths.
+  var groupSizes = runIndices.arraySlice(0, 1)
+      .subtract(runIndices.arraySlice(0, 0, -1));
+  return groupSizes;
+};
+
+var factors = function(image) {
+  return image.expression('b() * (b() - 1) * (b() * 2 + 5)');
+};
+
+var groupSizes = group(groups.toArray());
+var groupFactors = factors(groupSizes);
+var groupFactorSum = groupFactors.arrayReduce('sum', [0])
+      .arrayGet([0, 0]);
+
+var count = joined.count();
+
+var kendallVariance = factors(count)
+    .subtract(groupFactorSum)
+    .divide(18)
+    .float();
+// Compute Z-statistics.
+var zero = kendall.multiply(kendall.eq(0));
+var pos = kendall.multiply(kendall.gt(0)).subtract(1);
+var neg = kendall.multiply(kendall.lt(0)).add(1);
+
+var z = zero
+    .add(pos.divide(kendallVariance.sqrt()))
+    .add(neg.divide(kendallVariance.sqrt()));
+
+function eeCdf(z) {
+  return ee.Image(0.5)
+      .multiply(ee.Image(1).add(ee.Image(z).divide(ee.Image(2).sqrt()).erf()));
+}
+
+function invCdf(p) {
+  return ee.Image(2).sqrt()
+      .multiply(ee.Image(p).multiply(2).subtract(1).erfInv());
+}
+
+// Compute P-values.
+var p = ee.Image(1).subtract(eeCdf(z.abs())).lte(0.05).clip(roi);
+
+// Pixels that can have the null hypothesis (there is no trend) rejected.
+// Specifically, if the true trend is zero, there would be less than 5%
+// chance of randomly obtaining the observed result (that there is a trend).
+//use mask to modify the hills and urban high density area
+//var drought =sensSlope.updateMask(DEM).updateMask(treeCanopyCover).updateMask(p)
+var drought =sensSlope.updateMask(p)
+var ivp_temp = {"opacity":1,"min":-2.5,"max":0,"palette":["ff170b","ff5e00","ffc84e","f0ff0f","17ff1e","31feff","0b6cff"]}
+var impervious = NDVI_DR.select("NDVI").median().gt(0.1)
+var ndvi_2020 = NDVI_DR.filterDate("2020-01-01","2020-12-31").select("NDVI").median()
+Export.image.toDrive({
+ image:ndvi_2020.updateMask(impervious),
+  description: 'ndvi_2020',
+  scale: 250,
+   maxPixels: 1e13})
