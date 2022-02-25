@@ -1,0 +1,81 @@
+library(reshape2)
+library(tidyverse)
+library(bootstrap)
+library(QuantPsyc)  #姝ゅ寘涔熷彲浠ヨ緭鍑烘爣鍑嗗寲鐨勫洖褰掔郴鏁? lm.beta(lm_chap)
+library(relaimpo)
+library(psych)
+library(ggplot2)
+#remove spatial autocorrelation
+library(nlme)
+library(ape)
+library(MuMIn)
+library(ggstatsplot)
+library(rsq)
+library(extrafont)
+library(car)
+library(bfast)
+library(remotes)
+library(zoo)
+library(tidyverse)
+library(mblm)
+library(reshape2)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+windowsFonts(Arial = windowsFont("Arial"))
+stderr <- function(x, na.rm=FALSE) {
+  if (na.rm) x <- na.omit(x)
+  sqrt(var(x)/length(x))
+}
+library(extrafont)
+windowsFonts(Times=windowsFont("TT Arial"))
+setwd("D:\\硕士论文\\3-2")
+data<-read.table("NDVI_monthly.csv",header=T, na.strings = "NA", sep=",")
+data$Date <- as.Date(data$Date)
+
+library(zoo)
+temp.zoo<-zoo(data$NDVI,data$Date)
+m.av<-rollmean(temp.zoo, 12,fill = list(NA, NULL, NA))
+data$moving=coredata(m.av)
+
+
+NDVI = ggplot(data, aes(x = Date, y = NDVI)) +
+  geom_line(aes(Date,NDVI),color = "#9AC6DE",size=1)+geom_line(aes(Date,moving),color="black",size = 0.5)+theme_bw()+theme(text = element_text(size=21,face="bold" ))+
+  scale_x_date(date_breaks = '2 years', labels = date_format("%Y"))+theme(legend.position="none")
+ggsave("NDVI_time_series.pdf",plot = NDVI,dpi=600,width = 8,height = 4)
+
+data$month = month(data$Date)
+data$year = year(data$Date)
+data$AVEYEAR = with(data,ave(data$NDVI,data$year,FUN=mean))
+data$avemonth = with(data,ave(data$NDVI,data$month,FUN=mean))
+data$sdmonth = with(data,ave(data$NDVI,data$month,FUN=sd))
+data$Zscores = (data$NDVI - data$avemonth)/data$sdmonth
+data = data %>%
+  mutate(
+    season = case_when(
+      month %in%  9:11 ~ "Fall",
+      month %in%  c(12, 1, 2)  ~ "Winter",
+      month %in%  3:5  ~ "Spring",
+      TRUE ~ "Summer"))
+spring = data[data$season %in% "Spring",]
+spring$mean = with(spring,ave(spring$NDVI,spring$year,FUN=mean))
+spring = cbind(spring$year,spring$Zscores)
+write.table(data,"Zscores.csv",row.names=T,sep=",")
+
+
+
+############3
+season<-read.table("seasonal_zscores.csv",header=T, na.strings = "NA", sep=",")
+season$Date <- as.Date(season$Date)
+NDVI = ggplot(season, aes(x = Date)) +
+  geom_point(aes(Date,spring),color = "#ABEBC6",size=2)+
+  geom_point(aes(Date,summer),color = "#D7181B",size=2)+
+  geom_point(aes(Date,fall),color = "#FDAE61",size=2)+
+  geom_point(aes(Date,winter),color = "#21618C",size=2)+
+  geom_line(aes(Date,spring),color = "#ABEBC6",size=1)+
+  geom_line(aes(Date,summer),color = "#D7181B",size=1)+
+  geom_line(aes(Date,fall),color = "#FDAE61",size=1)+
+  geom_line(aes(Date,winter),color = "#21618C",size=1)+
+  scale_x_date(date_breaks = '2 years', labels = date_format("%Y"))+theme(legend.position="none")+
+theme_bw()+theme(text = element_text(size=21,face="bold" ))
+ggsave("NDVI_season.pdf",plot = NDVI,dpi=600,width = 8,height = 4)
