@@ -34,4 +34,44 @@ var chart = ui.Chart.image.series({
   scale: 1000
 }).setOptions({title: 'PDSI'});
 
+
+
+library(lubridate) # for working with dates
+library(ggplot2)  # for creating graphs
+library(scales)   # to access breaks/formatting functions
+library(gridExtra) # for arranging plots
+library(grid)   # for arranging plots
+library(dplyr)  # for subsetting by season
+library(reshape2)
+library(tidyr)
+library(extrafont)
+font_import()
+loadfonts(device="win") 
+windowsFonts(A = windowsFont("Arial"))
+setwd("C:\\Users\\ADMIN\\Desktop\\Idea\\figures\\line_chart")
+r<-read.table("LST_JP_moving.txt",header=T, na.strings = "NA", sep="\t")
+data=melt(as.data.frame(r),id.vars = "Date")
+data$Date <- as.Date(data$Date)
+ggplot(data, aes(x = Date, y = value)) + 
+  geom_line(aes(linetype="solid"),size=0.5)+ylim(-1.5,2.5)+theme_bw()+theme(text = element_text(size=15,family = "A",face="bold" ))+
+  scale_x_date(date_breaks = '2 years', labels = date_format("%Y"))+theme(legend.position="none")+
+  geom_smooth(method="lm",linetype = "dashed",color="#F68657", size=1.5, se = T,formula = y ~x)
+#########
+r<-read.table("PDSI.txt",header=T, na.strings = "NA", sep="\t")
+data=melt(as.data.frame(r),id.vars = "Date")
+data$Date <- as.Date(data$Date)
+ggplot(data, aes(x = Date, y = value)) + 
+  geom_line(aes(linetype="solid"),size=0.5)+ylim(-5, 7)+
+  theme_bw()+theme(text = element_text(size=15,family = "A",face="bold" ))+
+  scale_x_date(date_breaks = '2 years', labels = date_format("%Y"))+theme(legend.position="none")+
+  geom_hline(yintercept=-2, linetype="dashed", color = "#F68657",size = 1.5)
+#########
+r<-read.table("Pre_JP.txt",header=T, na.strings = "NA", sep="\t")
+data=melt(as.data.frame(r),id.vars = "Date")
+data$Date <- as.Date(data$Date)
+ggplot(data, aes(x = Date, y = value)) +
+  geom_bar(stat="identity",position = 'dodge')+theme_bw()+theme(text = element_text(size=15,family = "A",face="bold" ))+
+  scale_x_date(limits = c (as.Date("2001-01-01"),as.Date("2020-12-01")),date_breaks = '2 years', labels = date_format("%Y"))+theme(legend.position="none")+
+  ylab("Precipitation anomaly (mm)")+scale_y_continuous(breaks = c(-50,0,50,100,150),limits = c(-70,170))
+
 print(chart);
