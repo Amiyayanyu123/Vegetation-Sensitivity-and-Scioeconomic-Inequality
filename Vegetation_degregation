@@ -1,0 +1,452 @@
+library(reshape2)
+library(tidyverse)
+library(bootstrap)
+library(QuantPsyc)  #姝ゅ寘涔熷彲浠ヨ緭鍑烘爣鍑嗗寲鐨勫洖褰掔郴鏁? lm.beta(lm_chap)
+library(relaimpo)
+library(psych)
+library(ggplot2)
+#remove spatial autocorrelation
+library(nlme)
+library(ape)
+library(MuMIn)
+library(ggstatsplot)
+library(rsq)
+library(extrafont)
+library(car)
+library(bfast)
+library(remotes)
+library(zoo)
+library(tidyverse)
+library(mblm)
+library(reshape2)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(plyr)
+windowsFonts(Arial = windowsFont("Arial"))
+stderr <- function(x, na.rm=FALSE) {
+  if (na.rm) x <- na.omit(x)
+  sqrt(var(x)/length(x))
+}
+library(extrafont)
+windowsFonts(Times=windowsFont("TT Arial"))
+###################Data pre-processing
+setwd("D:\\Idea\\Ndvi_change_drought_events")
+Data<-read.table("DATA.csv",header=T, na.strings = "NA", sep=",")
+#######################climate zones
+#####################75% as majority
+White_Q75 = quantile(Data$white, prob=c(0.75))
+black_Q75 = quantile(Data$black, prob=c(0.75))
+hispanic_Q75 = quantile(Data$hispanic, prob=c(0.75))
+asian_Q75 = quantile(Data$asian, prob=c(0.75))
+
+###################333
+p_all = wilcox.test(Data[Data$white > White_Q75,]$NDVI_Z_Change,
+                    Data[Data$POC > POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_eq =  wilcox.test(eq[eq$white > eq_White_Q75,]$NDVI_Z_Change,
+                    eq[eq$POC > eq_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_tem =  wilcox.test(tem[tem$white > tem_White_Q75,]$NDVI_Z_Change,
+                     tem[tem$POC > tem_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_arid =  wilcox.test(arid[arid$white > arid_White_Q75,]$NDVI_Z_Change,
+                      arid[arid$POC > arid_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_snow = wilcox.test(snow[snow$white > snow_White_Q75,]$NDVI_Z_Change,
+                     snow[snow$POC > snow_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+#############ALL
+W_M = median(Data[Data$white > White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+W_S = stderr(Data[Data$white > White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_M = median(Data[Data$black > black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_S = stderr(Data[Data$black > black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_M = median(Data[Data$hispanic > hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_S = stderr(Data[Data$hispanic > hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_M = median(Data[Data$asian > asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_S = stderr(Data[Data$asian > asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+
+W_m = mean(Data[Data$white > White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_m = mean(Data[Data$hispanic > hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_m = mean(Data[Data$black > black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_m = mean(Data[Data$asian > asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+
+
+
+all = cbind(rbind(W_M,B_M,H_M,A_M),rbind(W_S,B_S,H_S,A_S),rbind(W_m,B_m,H_m,A_m))
+colnames(all) = c("median","se","mean")
+lable = c("White","Black","Hispanic","Asian")
+all = as.data.frame(cbind(all,lable))
+all$median = as.numeric(all$median)
+all$mean = as.numeric(all$mean)
+all$se = as.numeric(all$se)
+################################### ggplot2 to plot
+##############################
+
+ND = ggplot(all,aes(x = lable)) + 
+ geom_bar(aes(lable, mean),stat="identity", position=position_dodge(),width=0.6,fill='#77AE9B') +
+  geom_errorbar(aes(ymin=mean-2*se, ymax=mean+2*se), width=.2,
+                position=position_dodge(.9))+ 
+  geom_point(aes(lable, median),color = "black",
+size = 2,position = position_dodge(width = 1),shape = 4)+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=20,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=20),
+        legend.position="right",
+        legend.text = element_text(size=20
+        ),
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+ggsave("NDVI_Z_change_Race.pdf",plot = ND,dpi=600,width = 6,height = 4)
+#######################################
+##########33
+############
+##########33
+#####################
+White_Q75 = quantile(Data$owned, prob=c(0.75))
+black_Q75 = quantile(Data$season, prob=c(0.75))
+hispanic_Q75 = quantile(Data$rent, prob=c(0.75))
+asian_Q75 = quantile(Data$vaccant, prob=c(0.75))
+
+###################333
+p_all = wilcox.test(Data[Data$white > White_Q75,]$NDVI_Z_Change,
+                    Data[Data$POC > POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_eq =  wilcox.test(eq[eq$white > eq_White_Q75,]$NDVI_Z_Change,
+                    eq[eq$POC > eq_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_tem =  wilcox.test(tem[tem$white > tem_White_Q75,]$NDVI_Z_Change,
+                     tem[tem$POC > tem_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_arid =  wilcox.test(arid[arid$white > arid_White_Q75,]$NDVI_Z_Change,
+                      arid[arid$POC > arid_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_snow = wilcox.test(snow[snow$white > snow_White_Q75,]$NDVI_Z_Change,
+                     snow[snow$POC > snow_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+#############ALL
+W_M = median(Data[Data$owned > White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+W_S = stderr(Data[Data$owned > White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_M = median(Data[Data$season > black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_S = stderr(Data[Data$season > black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_M = median(Data[Data$rent > hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_S = stderr(Data[Data$rent > hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_M = median(Data[Data$vaccant > asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_S = stderr(Data[Data$vaccant > asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+
+W_m = mean(Data[Data$owned > White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_m = mean(Data[Data$season > black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_m = mean(Data[Data$rent > hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_m = mean(Data[Data$vaccant > asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+
+
+
+all = cbind(rbind(W_M,B_M,H_M,A_M),rbind(W_S,B_S,H_S,A_S),rbind(W_m,B_m,H_m,A_m))
+colnames(all) = c("median","se","mean")
+lable = c("Owned","Season","Rent","Vacant")
+all = as.data.frame(cbind(all,lable))
+all$median = as.numeric(all$median)
+all$mean = as.numeric(all$mean)
+all$se = as.numeric(all$se)
+################################### ggplot2 to plot
+##############################
+
+ND = ggplot(all,aes(x = lable)) + 
+  geom_bar(aes(lable, mean),stat="identity", position=position_dodge(),width=0.6,fill='#77AE9B') +
+  geom_errorbar(aes(ymin=mean-2*se, ymax=mean+2*se), width=.2,
+                position=position_dodge(.9))+ 
+  geom_point(aes(lable, median),color = "black",
+             size = 2,position = position_dodge(width = 1),shape = 4)+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=20,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=20),
+        legend.position="right",
+        legend.text = element_text(size=20
+        ),
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ylim(-0.6,0)
+ggsave("NDVI_Z_change_house.pdf",plot = ND,dpi=600,width = 6,height = 4)
+#######################################
+##########33
+############
+##########33
+#####################
+White_Q75 = quantile(Data$MAM, prob=c(0.75))
+black_Q75 = quantile(Data$JJA, prob=c(0.75))
+hispanic_Q75 = quantile(Data$SON, prob=c(0.75))
+asian_Q75 = quantile(Data$DJF, prob=c(0.75))
+
+###################333
+p_all = wilcox.test(Data[Data$white > White_Q75,]$NDVI_Z_Change,
+                    Data[Data$POC > POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_eq =  wilcox.test(eq[eq$white > eq_White_Q75,]$NDVI_Z_Change,
+                    eq[eq$POC > eq_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_tem =  wilcox.test(tem[tem$white > tem_White_Q75,]$NDVI_Z_Change,
+                     tem[tem$POC > tem_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_arid =  wilcox.test(arid[arid$white > arid_White_Q75,]$NDVI_Z_Change,
+                      arid[arid$POC > arid_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_snow = wilcox.test(snow[snow$white > snow_White_Q75,]$NDVI_Z_Change,
+                     snow[snow$POC > snow_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+#############ALL
+W_M = median(Data[Data$MAM > White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+W_S = stderr(Data[Data$MAM > White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_M = median(Data[Data$JJA > black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_S = stderr(Data[Data$JJA > black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_M = median(Data[Data$SON > hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_S = stderr(Data[Data$SON > hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_M = median(Data[Data$DJF > asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_S = stderr(Data[Data$DJF > asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+
+W_m = mean(Data[Data$MAM > White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_m = mean(Data[Data$JJA > black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_m = mean(Data[Data$SON > hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_m = mean(Data[Data$DJF > asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+
+
+
+all = cbind(rbind(W_M,B_M,H_M,A_M),rbind(W_S,B_S,H_S,A_S),rbind(W_m,B_m,H_m,A_m))
+colnames(all) = c("median","se","mean")
+lable = c("MAM","JJA","SON","DJF")
+all = as.data.frame(cbind(all,lable))
+all$median = as.numeric(all$median)
+all$mean = as.numeric(all$mean)
+all$se = as.numeric(all$se)
+################################### ggplot2 to plot
+##############################
+
+ND = ggplot(all,aes(x = lable)) + 
+  geom_bar(aes(lable, mean),stat="identity", position=position_dodge(),width=0.3,fill='#D45C41') +
+  geom_errorbar(aes(ymin=mean-2*se, ymax=mean+2*se), width=.2,
+                position=position_dodge(.9))+ 
+  geom_point(aes(lable, median),color = "black",
+             size = 2,position = position_dodge(width = 1),shape = 4)+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=20,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=20),
+        legend.position="right",
+        legend.text = element_text(size=20
+        ),
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+ggsave("NDVI_Z_change_tem.pdf",plot = ND,dpi=600,width = 6,height = 4)
+#######################################income
+##########33
+############
+##########33
+#####################
+White_Q75 = quantile(Data$income, prob=c(0.25))
+black_Q75 = quantile(Data$income, prob=c(0.50))
+hispanic_Q75 = quantile(Data$income, prob=c(0.75))
+asian_Q75 = quantile(Data$income, prob=c(1))
+
+###################333
+p_all = wilcox.test(Data[Data$white > White_Q75,]$NDVI_Z_Change,
+                    Data[Data$POC > POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_eq =  wilcox.test(eq[eq$white > eq_White_Q75,]$NDVI_Z_Change,
+                    eq[eq$POC > eq_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_tem =  wilcox.test(tem[tem$white > tem_White_Q75,]$NDVI_Z_Change,
+                     tem[tem$POC > tem_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_arid =  wilcox.test(arid[arid$white > arid_White_Q75,]$NDVI_Z_Change,
+                      arid[arid$POC > arid_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_snow = wilcox.test(snow[snow$white > snow_White_Q75,]$NDVI_Z_Change,
+                     snow[snow$POC > snow_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+#############ALL
+W_M = median(Data[Data$income <= White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+W_S = stderr(Data[Data$income <= White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_M = median(Data[Data$income > White_Q75&Data$income <= black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_S = stderr(Data[Data$income > White_Q75&Data$income <= black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_M = median(Data[Data$income > black_Q75&Data$income <= hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_S = stderr(Data[Data$income > black_Q75&Data$income <= hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_M = median(Data[Data$income > hispanic_Q75&Data$income <= asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_S = stderr(Data[Data$income > hispanic_Q75&Data$income <= asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+
+W_m = mean(Data[Data$income <= White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_m = mean(Data[Data$income > White_Q75&Data$income <= black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_m = mean(Data[Data$income > black_Q75&Data$income <= hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_m = mean(Data[Data$income > hispanic_Q75&Data$income <= asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+
+
+
+all = cbind(rbind(W_M,B_M,H_M,A_M),rbind(W_S,B_S,H_S,A_S),rbind(W_m,B_m,H_m,A_m))
+colnames(all) = c("median","se","mean")
+lable = c("1","2","3","4")
+all = as.data.frame(cbind(all,lable))
+all$median = as.numeric(all$median)
+all$mean = as.numeric(all$mean)
+all$se = as.numeric(all$se)
+################################### ggplot2 to plot
+##############################
+
+ND = ggplot(all,aes(x = lable)) + 
+  geom_bar(aes(lable, mean),stat="identity", position=position_dodge(),width=0.7,fill='#77AE9B',) +
+  geom_errorbar(aes(ymin=mean-2*se, ymax=mean+2*se), width=.2,
+                position=position_dodge(.9))+ 
+  geom_point(aes(lable, median),color = "black",
+             size = 2,position = position_dodge(width = 1),shape = 4)+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=20,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=20),
+        legend.position="right",
+        legend.text = element_text(size=20
+        ),
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+scale_y_continuous(limits=c(-0.6,0),breaks=seq(-0.6, 0, 0.1))
+ggsave("NDVI_Z_change_income.pdf",plot = ND,dpi=600,width = 4,height = 4)
+#######################################housevalue
+##########33
+############
+##########33
+#####################
+White_Q75 = quantile(Data$housevalue, prob=c(0.25))
+black_Q75 = quantile(Data$housevalue, prob=c(0.50))
+hispanic_Q75 = quantile(Data$housevalue, prob=c(0.75))
+asian_Q75 = quantile(Data$housevalue, prob=c(1))
+
+###################333
+p_all = wilcox.test(Data[Data$white > White_Q75,]$NDVI_Z_Change,
+                    Data[Data$POC > POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_eq =  wilcox.test(eq[eq$white > eq_White_Q75,]$NDVI_Z_Change,
+                    eq[eq$POC > eq_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_tem =  wilcox.test(tem[tem$white > tem_White_Q75,]$NDVI_Z_Change,
+                     tem[tem$POC > tem_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_arid =  wilcox.test(arid[arid$white > arid_White_Q75,]$NDVI_Z_Change,
+                      arid[arid$POC > arid_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_snow = wilcox.test(snow[snow$white > snow_White_Q75,]$NDVI_Z_Change,
+                     snow[snow$POC > snow_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+#############ALL
+W_M = median(Data[Data$housevalue <= White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+W_S = stderr(Data[Data$housevalue <= White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_M = median(Data[Data$housevalue > White_Q75&Data$housevalue <= black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_S = stderr(Data[Data$housevalue > White_Q75&Data$housevalue <= black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_M = median(Data[Data$housevalue > black_Q75&Data$housevalue <= hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_S = stderr(Data[Data$housevalue > black_Q75&Data$housevalue <= hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_M = median(Data[Data$housevalue > hispanic_Q75&Data$housevalue <= asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_S = stderr(Data[Data$housevalue > hispanic_Q75&Data$housevalue <= asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+
+W_m = mean(Data[Data$housevalue <= White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_m = mean(Data[Data$housevalue > White_Q75&Data$housevalue <= black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_m = mean(Data[Data$housevalue > black_Q75&Data$housevalue <= hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_m = mean(Data[Data$housevalue > hispanic_Q75&Data$housevalue <= asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+
+
+
+all = cbind(rbind(W_M,B_M,H_M,A_M),rbind(W_S,B_S,H_S,A_S),rbind(W_m,B_m,H_m,A_m))
+colnames(all) = c("median","se","mean")
+lable = c("1","2","3","4")
+all = as.data.frame(cbind(all,lable))
+all$median = as.numeric(all$median)
+all$mean = as.numeric(all$mean)
+all$se = as.numeric(all$se)
+################################### ggplot2 to plot
+##############################
+
+ND = ggplot(all,aes(x = lable)) + 
+  geom_bar(aes(lable, mean),stat="identity", position=position_dodge(),width=0.7,fill='#77AE9B',) +
+  geom_errorbar(aes(ymin=mean-2*se, ymax=mean+2*se), width=.2,
+                position=position_dodge(.9))+ 
+  geom_point(aes(lable, median),color = "black",
+             size = 2,position = position_dodge(width = 1),shape = 4)+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=20,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=20),
+        legend.position="right",
+        legend.text = element_text(size=20
+        ),
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+scale_y_continuous(breaks=seq(-0.6, 0, 0.1))
+ggsave("NDVI_Z_change_housevalue.pdf",plot = ND,dpi=600,width = 4,height = 4)
+#######################################gross_rent
+##########33
+############
+##########33
+#####################
+White_Q75 = quantile(Data$gross_rent, prob=c(0.25))
+black_Q75 = quantile(Data$gross_rent, prob=c(0.50))
+hispanic_Q75 = quantile(Data$gross_rent, prob=c(0.75))
+asian_Q75 = quantile(Data$gross_rent, prob=c(1))
+
+###################333
+p_all = wilcox.test(Data[Data$white > White_Q75,]$NDVI_Z_Change,
+                    Data[Data$POC > POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_eq =  wilcox.test(eq[eq$white > eq_White_Q75,]$NDVI_Z_Change,
+                    eq[eq$POC > eq_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_tem =  wilcox.test(tem[tem$white > tem_White_Q75,]$NDVI_Z_Change,
+                     tem[tem$POC > tem_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_arid =  wilcox.test(arid[arid$white > arid_White_Q75,]$NDVI_Z_Change,
+                      arid[arid$POC > arid_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+p_snow = wilcox.test(snow[snow$white > snow_White_Q75,]$NDVI_Z_Change,
+                     snow[snow$POC > snow_POC_Q75,]$NDVI_Z_Change,alternative = "two.sided")$p.value
+
+#############ALL
+W_M = median(Data[Data$gross_rent <= White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+W_S = stderr(Data[Data$gross_rent <= White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_M = median(Data[Data$gross_rent > White_Q75&Data$gross_rent <= black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_S = stderr(Data[Data$gross_rent > White_Q75&Data$gross_rent <= black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_M = median(Data[Data$gross_rent > black_Q75&Data$gross_rent <= hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_S = stderr(Data[Data$gross_rent > black_Q75&Data$gross_rent <= hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_M = median(Data[Data$gross_rent > hispanic_Q75&Data$gross_rent <= asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_S = stderr(Data[Data$gross_rent > hispanic_Q75&Data$gross_rent <= asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+
+W_m = mean(Data[Data$gross_rent <= White_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+B_m = mean(Data[Data$gross_rent > White_Q75&Data$gross_rent <= black_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+H_m = mean(Data[Data$gross_rent > black_Q75&Data$gross_rent <= hispanic_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+A_m = mean(Data[Data$gross_rent > hispanic_Q75&Data$gross_rent <= asian_Q75,]$NDVI_Z_Change,na.rm=TRUE)
+
+
+
+all = cbind(rbind(W_M,B_M,H_M,A_M),rbind(W_S,B_S,H_S,A_S),rbind(W_m,B_m,H_m,A_m))
+colnames(all) = c("median","se","mean")
+lable = c("1","2","3","4")
+all = as.data.frame(cbind(all,lable))
+all$median = as.numeric(all$median)
+all$mean = as.numeric(all$mean)
+all$se = as.numeric(all$se)
+################################### ggplot2 to plot
+##############################
+
+ND = ggplot(all,aes(x = lable)) + 
+  geom_bar(aes(lable, mean),stat="identity", position=position_dodge(),width=0.7,fill='#77AE9B',) +
+  geom_errorbar(aes(ymin=mean-2*se, ymax=mean+2*se), width=.2,
+                position=position_dodge(.9))+ 
+  geom_point(aes(lable, median),color = "black",
+             size = 2,position = position_dodge(width = 1),shape = 4)+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=20,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=20),
+        legend.position="right",
+        legend.text = element_text(size=20
+        ),
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+scale_y_continuous(breaks=seq(-0.6, 0, 0.1))
+ggsave("NDVI_Z_change_gross_rent.pdf",plot = ND,dpi=600,width = 4,height = 4)
