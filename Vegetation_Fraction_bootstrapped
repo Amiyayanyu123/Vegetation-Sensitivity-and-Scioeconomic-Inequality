@@ -1,0 +1,643 @@
+library(reshape2)
+library(tidyverse)
+library(bootstrap)
+library(QuantPsyc)  #濮濄倕瀵樻稊鐔峰讲娴犮儴绶崙鐑樼垼閸戝棗瀵查惃鍕礀瑜版帞閮撮弫? lm.beta(lm_chap)
+library(relaimpo)
+library(psych)
+library(ggplot2)
+#remove spatial autocorrelation
+library(nlme)
+library(ape)
+library(MuMIn)
+library(ggstatsplot)
+library(extrafont)
+windowsFonts(Times=windowsFont("TT Arial"))
+
+#drought
+setwd("D:\\Idea\\figures\\vege_fraction")
+r1<-read.table("dt.csv",header=T, na.strings = "NA", sep=",")
+r2<-read.table("ID.csv",header=T, na.strings = "NA", sep=",")
+r3<-read.table("vege.csv",header=T, na.strings = "NA", sep=",")
+
+colnames(r2) = c("ID","GEOID")
+data = merge(r2,r3)
+data_1 = merge(data,r1,by.y = "GEOID")
+data_1 = na.omit(data_1)
+###############3
+ApplyQuintiles <- function(x) {
+  cut(x, breaks=c(quantile(data_1$grass, probs = seq(0, 1, by = 0.25))), 
+      labels=c("1","2","3","4"), include.lowest=TRUE)
+}
+data_1$grass_class <- sapply(data_1$grass, ApplyQuintiles)
+
+ApplyQuintiles1 <- function(x) {
+  cut(x, breaks=c(quantile(data_1$shrub, probs = seq(0, 1, by = 0.25))), 
+      labels=c("1","2","3","4"), include.lowest=TRUE)
+}
+data_1$shrub_class <- sapply(data_1$shrub, ApplyQuintiles1)
+
+ApplyQuintiles2 <- function(x) {
+  cut(x, breaks=c(quantile(data_1$tree, probs = seq(0, 1, by = 0.25))), 
+      labels=c("1","2","3","4"), include.lowest=TRUE)
+}
+data_1$tree_class <- sapply(data_1$tree, ApplyQuintiles2)
+####### vegetation regression
+B <- 1000 #Bootstrap闁插秹鍣伴弽閿嬵偧閺??
+set.seed(123) #闂呭繑婧€缁夊秴鐡欑拋鍙ヨ礋123閿涘奔浜掗弬閫涚┒瀵版鍩岄惄绋挎倱閻ㄥ嫮绮ㄩ弸?
+
+
+lm_p_social1={}
+lm_b_social_std1={}
+R2_adj_all1={}
+
+lm_p_social2={}
+lm_b_social_std2={}
+R2_adj_all2={}
+
+lm_p_social3={}
+lm_b_social_std3={}
+R2_adj_all3={}
+
+lm_p_social4={}
+lm_b_social_std4={}
+R2_adj_all4={}
+
+for(b in 1:B){
+  dt1 = data_1[data_1$tree_class == 1,]
+  n1 = nrow(dt1)
+  dt_sub1<-dt1[sample(1:n1,500, replace=T),]
+  social1 <-lm(formula = r_dr~white+black+asian+hispanic, data=dt_sub1)
+  regress_social1 <-as.data.frame(summary(social1)[4])#?
+  print(summary(social1)[4])
+  lm_p_social1=rbind(lm_p_social1, regress_social1[,4])
+  lm_b_social_std1=rbind(lm_b_social_std1, lm.beta(social1))
+  R2_adj1<-summary(social1)[[9]]#?
+  R2_adj_all1=rbind(R2_adj_all1, R2_adj1)
+  
+  dt2 = data_1[data_1$tree_class == 2,]
+  n2 = nrow(dt2)
+  dt_sub2<-dt2[sample(1:n2,500, replace=T),]
+  social2 <-lm(formula = r_dr~white+black+asian+hispanic, data=dt_sub2)
+  regress_social2 <-as.data.frame(summary(social2)[4])#?
+  print(summary(social2)[4])
+  lm_p_social2=rbind(lm_p_social2, regress_social2[,4])
+  lm_b_social_std2=rbind(lm_b_social_std2, lm.beta(social2))
+  R2_adj2<-summary(social2)[[9]]#?
+  R2_adj_all2=rbind(R2_adj_all2, R2_adj2)
+  
+  dt3 = data_1[data_1$tree_class == 3,]
+  n3 = nrow(dt3)
+  dt_sub3<-dt3[sample(1:n3,500, replace=T),]
+  social3 <-lm(formula = r_dr~white+black+asian+hispanic, data=dt_sub3)
+  regress_social3 <-as.data.frame(summary(social3)[4])#?
+  print(summary(social3)[4])
+  lm_p_social3=rbind(lm_p_social3, regress_social3[,4])
+  lm_b_social_std3=rbind(lm_b_social_std3, lm.beta(social3))
+  R2_adj3<-summary(social3)[[9]]#?
+  R2_adj_all3=rbind(R2_adj_all3, R2_adj3)
+  
+  dt4 = data_1[data_1$tree_class == 4,]
+  n4 = nrow(dt4)
+  dt_sub4<-dt4[sample(1:n4,500, replace=T),]
+  social4 <-lm(formula = r_dr~white+black+asian+hispanic, data=dt_sub3)
+  regress_social4 <-as.data.frame(summary(social4)[4])#?
+  print(summary(social4)[4])
+  lm_p_social4=rbind(lm_p_social4, regress_social4[,4])
+  lm_b_social_std4=rbind(lm_b_social_std4, lm.beta(social4))
+  R2_adj4<-summary(social4)[[9]]#?
+  R2_adj_all4=rbind(R2_adj_all4, R2_adj4)
+}
+
+#mletdata
+r1=lm_b_social_std1
+r2=lm_b_social_std2
+r3=lm_b_social_std3
+r4=lm_b_social_std4
+colnames(r1)<-c("White","Black","Asian","H")
+colnames(r2)<-c("White","Black","Asian","H")
+colnames(r3)<-c("White","Black","Asian","H")
+colnames(r4)<-c("White","Black","Asian","H")
+r1 <- melt(r1)
+r1=transform(r1, year = "1")
+r2 <- melt(r2)
+r2=transform(r2, year = "2")
+r3 <- melt(r3)
+r3=transform(r3, year = "3")
+r4 <- melt(r4)
+r4=transform(r4, year = "4")
+R_houseuse =rbind(r1,r2,r3,r4)
+colnames(R_houseuse)<-c("ID","variable","beta","category")
+
+ND = ggplot(R_houseuse, aes(x = variable, y = beta,fill=factor(category)))+
+  geom_boxplot(outlier.shape = NA,outlier.size = 1, aes(fill=factor(category)),
+               position = position_dodge(0.4),size=0.4,notch=F,width=0.3) +  
+  guides(fill=guide_legend(title="category"))+scale_y_continuous(labels=scaleFUN)+
+  theme_minimal()+scale_fill_manual(values=c("#E2F0D9","#A9D18E","#548235","#385723"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=24),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ theme(legend.position="none")
+ggsave("grass_Race.pdf",plot = ND,dpi=600,width = 5,height = 5)
+#p
+p1=lm_p_social1[,2:5]
+p2=lm_p_social2[,2:5]
+p3=lm_p_social3[,2:5]
+p4=lm_p_social4[,2:5]
+colnames(p1)<-c("White","Black","Asian","H")
+colnames(p2)<-c("White","Black","Asian","H")
+colnames(p3)<-c("White","Black","Asian","H")
+colnames(p4)<-c("White","Black","Asian","H")
+p1 <- melt(p1)
+p1=transform(p1, year = "1")
+p2 <- melt(p2)
+p2=transform(p2, year = "2")
+p3 <- melt(p3)
+p3=transform(p3, year = "3")
+p4 <- melt(p4)
+p4=transform(p4, year = "4")
+p_houseuse=rbind(p1,p2,p3,p4)
+colnames(p_houseuse)<-c("ID","variable","p_value","category")
+ND1 = ggplot(p_houseuse, aes(x = variable, y = p_value,fill=factor(category)))+
+  geom_boxplot(outlier.size = 1, aes(fill=factor(category)),
+               position = position_dodge(0.4),size=0.4,notch=F,width=0.3) + 
+  guides(fill=guide_legend(title="category"))+scale_y_continuous(name="p-value")+
+  theme_minimal()+scale_fill_manual(values=c("#E2F0D9","#A9D18E","#548235","#385723"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=24),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ theme(legend.position="none")
+ggsave("grass_Race_p.pdf",plot = ND1,dpi=600,width = 5,height = 5)
+####### vegetation regression
+############
+#########################
+##################33
+################
+B <- 1000 #Bootstrap闁插秹鍣伴弽閿嬵偧閺??
+set.seed(123) #闂呭繑婧€缁夊秴鐡欑拋鍙ヨ礋123閿涘奔浜掗弬閫涚┒瀵版鍩岄惄绋挎倱閻ㄥ嫮绮ㄩ弸?
+
+
+lm_p_social1={}
+lm_b_social_std1={}
+R2_adj_all1={}
+
+lm_p_social2={}
+lm_b_social_std2={}
+R2_adj_all2={}
+
+lm_p_social3={}
+lm_b_social_std3={}
+R2_adj_all3={}
+
+lm_p_social4={}
+lm_b_social_std4={}
+R2_adj_all4={}
+
+for(b in 1:B){
+  dt1 = data_1[data_1$tree_class == 1,]
+  n1 = nrow(dt1)
+  dt_sub1<-dt1[sample(1:n1,500, replace=T),]
+  social1 <-lm(formula = r_dr~owned+season+rent+vaccant, data=dt_sub1)
+  regress_social1 <-as.data.frame(summary(social1)[4])#?
+  print(summary(social1)[4])
+  lm_p_social1=rbind(lm_p_social1, regress_social1[,4])
+  lm_b_social_std1=rbind(lm_b_social_std1, lm.beta(social1))
+  R2_adj1<-summary(social1)[[9]]#?
+  R2_adj_all1=rbind(R2_adj_all1, R2_adj1)
+  
+  dt2 = data_1[data_1$tree_class == 2,]
+  n2 = nrow(dt2)
+  dt_sub2<-dt2[sample(1:n2,500, replace=T),]
+  social2 <-lm(formula = r_dr~owned+season+rent+vaccant, data=dt_sub2)
+  regress_social2 <-as.data.frame(summary(social2)[4])#?
+  print(summary(social2)[4])
+  lm_p_social2=rbind(lm_p_social2, regress_social2[,4])
+  lm_b_social_std2=rbind(lm_b_social_std2, lm.beta(social2))
+  R2_adj2<-summary(social2)[[9]]#?
+  R2_adj_all2=rbind(R2_adj_all2, R2_adj2)
+  
+  dt3 = data_1[data_1$tree_class == 3,]
+  n3 = nrow(dt3)
+  dt_sub3<-dt3[sample(1:n3,500, replace=T),]
+  social3 <-lm(formula = r_dr~owned+season+rent+vaccant, data=dt_sub3)
+  regress_social3 <-as.data.frame(summary(social3)[4])#?
+  print(summary(social3)[4])
+  lm_p_social3=rbind(lm_p_social3, regress_social3[,4])
+  lm_b_social_std3=rbind(lm_b_social_std3, lm.beta(social3))
+  R2_adj3<-summary(social3)[[9]]#?
+  R2_adj_all3=rbind(R2_adj_all3, R2_adj3)
+  
+  dt4 = data_1[data_1$tree_class == 4,]
+  n4 = nrow(dt4)
+  dt_sub4<-dt4[sample(1:n4,500, replace=T),]
+  social4 <-lm(formula = r_dr~owned+season+rent+vaccant, data=dt_sub3)
+  regress_social4 <-as.data.frame(summary(social4)[4])#?
+  print(summary(social4)[4])
+  lm_p_social4=rbind(lm_p_social4, regress_social4[,4])
+  lm_b_social_std4=rbind(lm_b_social_std4, lm.beta(social4))
+  R2_adj4<-summary(social4)[[9]]#?
+  R2_adj_all4=rbind(R2_adj_all4, R2_adj4)
+}
+
+#mletdata
+r1=lm_b_social_std1
+r2=lm_b_social_std2
+r3=lm_b_social_std3
+r4=lm_b_social_std4
+colnames(r1)<-c("Owned","S","Rent","Vacant")
+colnames(r2)<-c("Owned","S","Rent","Vacant")
+colnames(r3)<-c("Owned","S","Rent","Vacant")
+colnames(r4)<-c("Owned","S","Rent","Vacant")
+r1 <- melt(r1)
+r1=transform(r1, year = "1")
+r2 <- melt(r2)
+r2=transform(r2, year = "2")
+r3 <- melt(r3)
+r3=transform(r3, year = "3")
+r4 <- melt(r4)
+r4=transform(r4, year = "4")
+R_houseuse =rbind(r1,r2,r3,r4)
+colnames(R_houseuse)<-c("ID","variable","beta","category")
+scaleFUN <- function(x) sprintf("%.1f", x)
+
+ND = ggplot(R_houseuse, aes(x = variable, y = beta,fill=factor(category)))+
+  geom_boxplot(outlier.shape = NA,outlier.size = 1, aes(fill=factor(category)),
+               position = position_dodge(0.4),size=0.4,notch=F,width=0.3) +  
+  guides(fill=guide_legend(title="category"))+scale_y_continuous(labels=scaleFUN)+
+  theme_minimal()+scale_fill_manual(values=c("#E2F0D9","#A9D18E","#548235","#385723"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=24),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ theme(legend.position="none")
+ggsave("grass_house.pdf",plot = ND,dpi=600,width = 5,height = 5)
+#p
+p1=lm_p_social1[,2:5]
+p2=lm_p_social2[,2:5]
+p3=lm_p_social3[,2:5]
+p4=lm_p_social4[,2:5]
+colnames(p1)<-c("Owned","S","Rent","Vacant")
+colnames(p2)<-c("Owned","S","Rent","Vacant")
+colnames(p3)<-c("Owned","S","Rent","Vacant")
+colnames(p4)<-c("Owned","S","Rent","Vacant")
+p1 <- melt(p1)
+p1=transform(p1, year = "1")
+p2 <- melt(p2)
+p2=transform(p2, year = "2")
+p3 <- melt(p3)
+p3=transform(p3, year = "3")
+p4 <- melt(p4)
+p4=transform(p4, year = "4")
+p_houseuse=rbind(p1,p2,p3,p4)
+colnames(p_houseuse)<-c("ID","variable","p_value","category")
+ND1 = ggplot(p_houseuse, aes(x = variable, y = p_value,fill=factor(category)))+
+  geom_boxplot(outlier.size = 1, aes(fill=factor(category)),
+               position = position_dodge(0.4),size=0.4,notch=F,width=0.3) + 
+  guides(fill=guide_legend(title="category"))+scale_y_continuous(name="p-value")+
+  theme_minimal()+scale_fill_manual(values=c("#E2F0D9","#A9D18E","#548235","#385723"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=24),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ theme(legend.position="none")
+ggsave("grass_house_p.pdf",plot = ND1,dpi=600,width = 5,height = 5)
+####### vegetation regression
+############
+#########################
+##################33
+################
+B <- 1000 #Bootstrap闁插秹鍣伴弽閿嬵偧閺??
+set.seed(123) #闂呭繑婧€缁夊秴鐡欑拋鍙ヨ礋123閿涘奔浜掗弬閫涚┒瀵版鍩岄惄绋挎倱閻ㄥ嫮绮ㄩ弸?
+
+
+lm_p_social1={}
+lm_b_social_std1={}
+R2_adj_all1={}
+
+lm_p_social2={}
+lm_b_social_std2={}
+R2_adj_all2={}
+
+lm_p_social3={}
+lm_b_social_std3={}
+R2_adj_all3={}
+
+lm_p_social4={}
+lm_b_social_std4={}
+R2_adj_all4={}
+
+for(b in 1:B){
+  dt1 = data_1[data_1$tree_class == 1,]
+  n1 = nrow(dt1)
+  dt_sub1<-dt1[sample(1:n1,500, replace=T),]
+  social1 <-lm(formula = r_dr~spring+summer+fall+winter, data=dt_sub1)
+  regress_social1 <-as.data.frame(summary(social1)[4])#?
+  print(summary(social1)[4])
+  lm_p_social1=rbind(lm_p_social1, regress_social1[,4])
+  lm_b_social_std1=rbind(lm_b_social_std1, lm.beta(social1))
+  R2_adj1<-summary(social1)[[9]]#?
+  R2_adj_all1=rbind(R2_adj_all1, R2_adj1)
+  
+  dt2 = data_1[data_1$tree_class == 2,]
+  n2 = nrow(dt2)
+  dt_sub2<-dt2[sample(1:n2,500, replace=T),]
+  social2 <-lm(formula = r_dr~spring+summer+fall+winter, data=dt_sub2)
+  regress_social2 <-as.data.frame(summary(social2)[4])#?
+  print(summary(social2)[4])
+  lm_p_social2=rbind(lm_p_social2, regress_social2[,4])
+  lm_b_social_std2=rbind(lm_b_social_std2, lm.beta(social2))
+  R2_adj2<-summary(social2)[[9]]#?
+  R2_adj_all2=rbind(R2_adj_all2, R2_adj2)
+  
+  dt3 = data_1[data_1$tree_class == 3,]
+  n3 = nrow(dt3)
+  dt_sub3<-dt3[sample(1:n3,500, replace=T),]
+  social3 <-lm(formula = r_dr~spring+summer+fall+winter, data=dt_sub3)
+  regress_social3 <-as.data.frame(summary(social3)[4])#?
+  print(summary(social3)[4])
+  lm_p_social3=rbind(lm_p_social3, regress_social3[,4])
+  lm_b_social_std3=rbind(lm_b_social_std3, lm.beta(social3))
+  R2_adj3<-summary(social3)[[9]]#?
+  R2_adj_all3=rbind(R2_adj_all3, R2_adj3)
+  
+  dt4 = data_1[data_1$tree_class == 4,]
+  n4 = nrow(dt4)
+  dt_sub4<-dt4[sample(1:n4,500, replace=T),]
+  social4 <-lm(formula = r_dr~spring+summer+fall+winter, data=dt_sub3)
+  regress_social4 <-as.data.frame(summary(social4)[4])#?
+  print(summary(social4)[4])
+  lm_p_social4=rbind(lm_p_social4, regress_social4[,4])
+  lm_b_social_std4=rbind(lm_b_social_std4, lm.beta(social4))
+  R2_adj4<-summary(social4)[[9]]#?
+  R2_adj_all4=rbind(R2_adj_all4, R2_adj4)
+}
+
+#mletdata
+r1=lm_b_social_std1
+r2=lm_b_social_std2
+r3=lm_b_social_std3
+r4=lm_b_social_std4
+colnames(r1)<-c("MAM","JJA","SON","DJF")
+colnames(r2)<-c("MAM","JJA","SON","DJF")
+colnames(r3)<-c("MAM","JJA","SON","DJF")
+colnames(r4)<-c("MAM","JJA","SON","DJF")
+r1 <- melt(r1)
+r1=transform(r1, year = "1")
+r2 <- melt(r2)
+r2=transform(r2, year = "2")
+r3 <- melt(r3)
+r3=transform(r3, year = "3")
+r4 <- melt(r4)
+r4=transform(r4, year = "4")
+R_houseuse =rbind(r1,r2,r3,r4)
+colnames(R_houseuse)<-c("ID","variable","beta","category")
+scaleFUN <- function(x) sprintf("%.1f", x)
+
+ND = ggplot(R_houseuse, aes(x = variable, y = beta,fill=factor(category)))+
+  geom_boxplot(outlier.shape = NA,outlier.size = 1, aes(fill=factor(category)),
+               position = position_dodge(0.4),size=0.4,notch=F,width=0.3) +  
+  guides(fill=guide_legend(title="category"))+scale_y_continuous(labels=scaleFUN)+
+  theme_minimal()+scale_fill_manual(values=c("#E2F0D9","#A9D18E","#548235","#385723"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=24),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ theme(legend.position="none")
+ggsave("grass_temp.pdf",plot = ND,dpi=600,width = 5,height = 5)
+#p
+p1=lm_p_social1[,2:5]
+p2=lm_p_social2[,2:5]
+p3=lm_p_social3[,2:5]
+p4=lm_p_social4[,2:5]
+colnames(p1)<-c("MAM","JJA","SON","DJF")
+colnames(p2)<-c("MAM","JJA","SON","DJF")
+colnames(p3)<-c("MAM","JJA","SON","DJF")
+colnames(p4)<-c("MAM","JJA","SON","DJF")
+p1 <- melt(p1)
+p1=transform(p1, year = "1")
+p2 <- melt(p2)
+p2=transform(p2, year = "2")
+p3 <- melt(p3)
+p3=transform(p3, year = "3")
+p4 <- melt(p4)
+p4=transform(p4, year = "4")
+p_houseuse=rbind(p1,p2,p3,p4)
+colnames(p_houseuse)<-c("ID","variable","p_value","category")
+ND1 = ggplot(p_houseuse, aes(x = variable, y = p_value,fill=factor(category)))+
+  geom_boxplot(outlier.size = 1, aes(fill=factor(category)),
+               position = position_dodge(0.4),size=0.4,notch=F,width=0.3) + 
+  guides(fill=guide_legend(title="category"))+scale_y_continuous(name="p-value")+
+  theme_minimal()+scale_fill_manual(values=c("#E2F0D9","#A9D18E","#548235","#385723"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=24),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ theme(legend.position="none")
+ggsave("grass_temp_p.pdf",plot = ND1,dpi=600,width = 5,height = 5)
+#
+#
+#
+#
+B <- 1000 #Bootstrap闁插秹鍣伴弽閿嬵偧閺??
+set.seed(123) #闂呭繑婧€缁夊秴鐡欑拋鍙ヨ礋123閿涘奔浜掗弬閫涚┒瀵版鍩岄惄绋挎倱閻ㄥ嫮绮ㄩ弸?
+
+
+lm_p_social1={}
+lm_b_social_std1={}
+R2_adj_all1={}
+
+lm_p_social2={}
+lm_b_social_std2={}
+R2_adj_all2={}
+
+lm_p_social3={}
+lm_b_social_std3={}
+R2_adj_all3={}
+
+lm_p_social4={}
+lm_b_social_std4={}
+R2_adj_all4={}
+
+for(b in 1:B){
+  dt1 = data_1[data_1$tree_class == 1,]
+  n1 = nrow(dt1)
+  dt_sub1<-dt1[sample(1:n1,500, replace=T),]
+  social1 <-lm(formula = r_dr~income+gross_rent+house_value, data=dt_sub1)
+  regress_social1 <-as.data.frame(summary(social1)[4])#?
+  print(summary(social1)[4])
+  lm_p_social1=rbind(lm_p_social1, regress_social1[,4])
+  lm_b_social_std1=rbind(lm_b_social_std1, lm.beta(social1))
+  R2_adj1<-summary(social1)[[9]]#?
+  R2_adj_all1=rbind(R2_adj_all1, R2_adj1)
+  
+  dt2 = data_1[data_1$tree_class == 2,]
+  n2 = nrow(dt2)
+  dt_sub2<-dt2[sample(1:n2,500, replace=T),]
+  social2 <-lm(formula = r_dr~income+gross_rent+house_value, data=dt_sub2)
+  regress_social2 <-as.data.frame(summary(social2)[4])#?
+  print(summary(social2)[4])
+  lm_p_social2=rbind(lm_p_social2, regress_social2[,4])
+  lm_b_social_std2=rbind(lm_b_social_std2, lm.beta(social2))
+  R2_adj2<-summary(social2)[[9]]#?
+  R2_adj_all2=rbind(R2_adj_all2, R2_adj2)
+  
+  dt3 = data_1[data_1$tree_class == 3,]
+  n3 = nrow(dt3)
+  dt_sub3<-dt3[sample(1:n3,500, replace=T),]
+  social3 <-lm(formula = r_dr~income+gross_rent+house_value, data=dt_sub3)
+  regress_social3 <-as.data.frame(summary(social3)[4])#?
+  print(summary(social3)[4])
+  lm_p_social3=rbind(lm_p_social3, regress_social3[,4])
+  lm_b_social_std3=rbind(lm_b_social_std3, lm.beta(social3))
+  R2_adj3<-summary(social3)[[9]]#?
+  R2_adj_all3=rbind(R2_adj_all3, R2_adj3)
+  
+  dt4 = data_1[data_1$tree_class == 4,]
+  n4 = nrow(dt4)
+  dt_sub4<-dt4[sample(1:n4,500, replace=T),]
+  social4 <-lm(formula = r_dr~income+gross_rent+house_value, data=dt_sub3)
+  regress_social4 <-as.data.frame(summary(social4)[4])#?
+  print(summary(social4)[4])
+  lm_p_social4=rbind(lm_p_social4, regress_social4[,4])
+  lm_b_social_std4=rbind(lm_b_social_std4, lm.beta(social4))
+  R2_adj4<-summary(social4)[[9]]#?
+  R2_adj_all4=rbind(R2_adj_all4, R2_adj4)
+}
+
+#mletdata
+r1=lm_b_social_std1
+r2=lm_b_social_std2
+r3=lm_b_social_std3
+r4=lm_b_social_std4
+colnames(r1)<-c("Income","GR","HV")
+colnames(r2)<-c("Income","GR","HV")
+colnames(r3)<-c("Income","GR","HV")
+colnames(r4)<-c("Income","GR","HV")
+r1 <- melt(r1)
+r1=transform(r1, year = "1")
+r2 <- melt(r2)
+r2=transform(r2, year = "2")
+r3 <- melt(r3)
+r3=transform(r3, year = "3")
+r4 <- melt(r4)
+r4=transform(r4, year = "4")
+R_houseuse =rbind(r1,r2,r3,r4)
+colnames(R_houseuse)<-c("ID","variable","beta","category")
+scaleFUN <- function(x) sprintf("%.1f", x)
+
+ND = ggplot(R_houseuse, aes(x = variable, y = beta,fill=factor(category)))+
+  geom_boxplot(outlier.shape = NA,outlier.size = 1, aes(fill=factor(category)),
+               position = position_dodge(0.4),size=0.4,notch=F,width=0.3) +  
+  guides(fill=guide_legend(title="category"))+scale_y_continuous(labels=scaleFUN)+
+  theme_minimal()+scale_fill_manual(values=c("#E2F0D9","#A9D18E","#548235","#385723"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=24),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ theme(legend.position="none")
+ggsave("grass_value.pdf",plot = ND,dpi=600,width = 5,height = 5)
+#p
+p1=lm_p_social1[,2:4]
+p2=lm_p_social2[,2:4]
+p3=lm_p_social3[,2:4]
+p4=lm_p_social4[,2:4]
+colnames(p1)<-c("Income","GR","HV")
+colnames(p2)<-c("Income","GR","HV")
+colnames(p3)<-c("Income","GR","HV")
+colnames(p4)<-c("Income","GR","HV")
+p1 <- melt(p1)
+p1=transform(p1, year = "1")
+p2 <- melt(p2)
+p2=transform(p2, year = "2")
+p3 <- melt(p3)
+p3=transform(p3, year = "3")
+p4 <- melt(p4)
+p4=transform(p4, year = "4")
+p_houseuse=rbind(p1,p2,p3,p4)
+colnames(p_houseuse)<-c("ID","variable","p_value","category")
+ND1 = ggplot(p_houseuse, aes(x = variable, y = p_value,fill=factor(category)))+
+  geom_boxplot(outlier.size = 1, aes(fill=factor(category)),
+               position = position_dodge(0.4),size=0.4,notch=F,width=0.3) + 
+  guides(fill=guide_legend(title="category"))+scale_y_continuous(name="p-value")+
+  theme_minimal()+scale_fill_manual(values=c("#E2F0D9","#A9D18E","#548235","#385723"))+
+  theme(axis.title=element_blank(),
+        axis.text = element_text(size=24,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=24),
+        legend.position="right",
+        legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))+ theme(legend.position="none")
+ggsave("grass_value_p.pdf",plot = ND1,dpi=600,width = 5,height = 5)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#################3 vegetation class
+se <- function(x, na.rm=FALSE) {
+  if (na.rm) x <- na.omit(x)
+  sqrt(var(x)/length(x))
+}
+
+grass_boxplot = data_1 %>%
+  group_by(grass_class) %>%
+  summarise(mean = mean(r_dr, na.rm = TRUE),
+            se = se(r_dr, na.rm = TRUE))
+
+shrub_boxplot = data_1 %>%
+  group_by(shrub_class) %>%
+  summarise(mean = mean(r_dr, na.rm = TRUE),
+            se = se(r_dr, na.rm = TRUE))
+
+tree_boxplot = data_1 %>%
+  group_by(tree_class) %>%
+  summarise(mean = mean(r_dr, na.rm = TRUE),
+            se = se(r_dr, na.rm = TRUE))
+
+ggplot(data = grass_boxplot,aes(x = grass_class,y= mean))+
+  geom_bar(stat = "identity",color = "black",position=position_dodge())+ theme_classic()+
+  geom_errorbar(aes(ymin=mean-2*se, ymax=mean+2*se), width=.2,
+                position=position_dodge(.9))+
+  labs(x="Climate Events Compare", y = "Δ VPI Z-Scores")+
+  theme(axis.text = element_text(face="plain",color="black", size=20),
+        axis.title=element_text(size=20,face="bold",color="black") ,
+        legend.position="none")+
+  scale_fill_manual(values=c('#FDD4CF','#F1AAF0',"#C6F3F0","#AAB2F9"))
+###########
