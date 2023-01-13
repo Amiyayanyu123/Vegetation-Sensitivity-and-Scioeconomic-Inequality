@@ -1,0 +1,181 @@
+library(xts)
+library(lubridate)
+library(ggstatsplot)
+library(rsq)
+library(extrafont)
+library(car)
+library(bfast)
+library(remotes)
+setwd("C:\\Users\\ADMIN\\Desktop\\New_Idea\\bfast")
+dt<-read.table("cooling_rich.txt",header=T, na.strings = "NA", sep="\t")
+ht=cbind(dt[,1],dt[,3])
+colnames(ht)=c("date","value")
+ht = as.data.frame(ht)
+ht$date = as.Date(ht$date)
+##方法一，函数的方法
+ts.complete <- function(data, by, ...) {
+  tb <- tidyr::complete(
+    data,
+    date = seq(
+      min(data[, date]),
+      max(data[, date]),
+      by = by
+    ),
+    fill = list(value = NA)
+  )
+  start_y <- as.numeric(substr(min(tb$date), 1, 4))
+  start_m <- as.numeric(substr(min(tb$date), 6, 7))
+  return(
+    ts(
+      as.numeric(as.matrix(tb[, 2])),
+      start = c(start_y, start_m),
+      ...
+    )
+  )
+}
+head(ht,15)
+require(data.table)
+ht = as.data.table(ht)
+completed = ts.complete(ht, by = '16 days', frequency = 23)
+completed
+ts.fill <- function(data) zoo::na.StructTS(data)
+filled = ts.fill(completed)
+m= as.data.frame(filled)
+n = as.data.frame(completed)
+x= cbind(m,n)
+plot(filled)
+plot(completed)
+
+##方法二，先将数据转化为xts，再变为ts后，直接填补插值即可，不需要函数
+ht = as.data.frame(ht)
+xts_ht = xts(ht[,"value"],order.by = ht[,"date"])
+library(tsbox)
+library(zoo)
+ts_ht = ts_ts(xts_ht)
+plot.ts(ts_ht)
+m = na.StructTS(ts_ht, na.rm = FALSE, maxgap = Inf)
+plot(m)
+
+#####time——series——analysis
+setwd("C:\\Users\\ADMIN\\Desktop\\cooling_effect\\tree_recovery")
+ndvi<-read.table("Lai.txt",header=T, na.strings = "NA", sep="\t")
+require(data.table)
+ndvi = as.data.table(ndvi)
+ndvi$date = as.Date(ndvi$date)
+ts.complete <- function(data, by, ...) {
+  tb <- tidyr::complete(
+    data,
+    date = seq(
+      min(data[, date]),
+      max(data[, date]),
+      by = by
+    ),
+    fill = list(value = NA)
+  )
+  start_y <- as.numeric(substr(min(tb$date), 1, 4))
+  start_m <- as.numeric(substr(min(tb$date), 6, 7))
+  return(
+    ts(
+      as.numeric(as.matrix(tb[, 2])),
+      start = c(start_y, start_m),
+      ...
+    )
+  )
+}
+
+# example
+set.seed(1)
+dt = data.table(
+  date = sort(
+    sample(
+      seq(
+        as.Date('1999/05/01'),
+        as.Date('2010/05/01'),
+        by= 'month'
+      ),
+      120
+    )
+  ),
+  value = runif(120) - seq(-140, -21)^2 / 10000
+)
+completed = ts.complete(ndvi, by = '1 month', frequency = 12)
+ts.fill <- function(data) zoo::na.StructTS(data)
+# example
+filled = ts.fill(completed)
+ts.data <- function(stl) {
+  d <- zoo::as.yearmon(time(stl$time.series))
+  dt <- cbind(d, as.data.table(stl$time.series))
+  colnames(dt)[1] <- 'date'
+  dt[, all := seasonal + trend + remainder]
+  return(dt)
+}
+
+# example
+td = ts.data(
+  stl(filled, 'per')
+)
+print(
+  stl(filled, 'per')
+)
+tiff("Lai_loess.tiff", units="in", width=10, height=5, res=600)
+plot(
+  stl(filled, 'per')
+)
+dev.off()
+library(bfast)
+library(Rcpp)
+(rdist <- 20/length(filled))
+fit <- bfast(filled, h = rdist, season = "harmonic", max.iter = 1)
+tiff("Lai.tiff", units="in", width=10, height=5, res=600)
+plot(fit,ANOVA = TRUE)
+dev.off()
+
+
+
+
+
+
+#另一种方法
+ndvi = as.data.frame(ndvi)
+xts_ht = xts(ndvi[,"cooling_effect"],order.by = ndvi[,"date"])
+library(tsbox)
+library(zoo)
+ts_ht = ts_ts(xts_ht)
+ts_ht = na.StructTS(ts_ht)
+plot.ts(ts_ht)
+ts.data <- function(stl) {
+  d <- zoo::as.yearmon(time(stl$time.series))
+  dt <- cbind(d, as.data.table(stl$time.series))
+  colnames(dt)[1] <- 'date'
+  dt[, all := seasonal + trend + remainder]
+  return(dt)
+}
+
+# example
+td = ts.data(
+  stl(ts_ht, 'per')
+)
+print(
+  stl(ts_ht, 'per')
+)
+tiff("loess_cooling_rich.tiff", units="in", width=10, height=5, res=600)
+plot(
+  stl(ts_ht, 'per')
+)
+dev.off()
+###BFAST
+library(bfast)
+library(Rcpp)
+(rdist <- 20/length(ts_ht))
+fit <- bfast(ts_ht, h = rdist, season = "harmonic", max.iter = 1)
+tiff("bfast_cooling_rich.tiff", units="in", width=10, height=5, res=600)
+plot(fit,ANOVA = TRUE)
+niter <- length(fit$output) # nr of iterations
+out <- fit$output[[niter]]
+dev.off()
+########################
+setwd("C:\\Users\\ADMIN\\Desktop\\CooL\\shp")
+dt<-read.table("ACS_Data.csv",header=T, na.strings = "NA", sep=",")
+dt = na.omit(dt)
+quantile(dt$Income, prob=c(0, 0.25, 0.5, 0.75))
+
