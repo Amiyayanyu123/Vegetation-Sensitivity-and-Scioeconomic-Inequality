@@ -3,6 +3,7 @@
 Main Findings: Economically disadvantaged areas with higher proportions of Hispanics and Blacks are typified by vegetation more sensitive to drought, 
 which is likely linked to inequality in water use. Moreover, these populations experience a lower degree of vegetation cooling effects and higher exposure to heatwaves.
 
+
 # Figures:
 
 ![image](https://github.com/Amiyayanyu123/Vegetation-Sensitivity-and-Scioeconomic-Inequality/assets/75403085/f0ca7c6c-a253-45bf-84ae-5e2643930eb9)
